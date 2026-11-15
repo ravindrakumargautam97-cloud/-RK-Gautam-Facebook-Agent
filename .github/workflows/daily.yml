@@ -1,0 +1,33 @@
+
+name: RK Gautam Daily AI Agent
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 2 * * *'
+      timezone: 'Asia/Kolkata'
+
+permissions:
+  contents: read
+
+jobs:
+  daily-content:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate Daily Content
+        run: python agent.py
+
+      - name: Save Generated Content
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-facebook-posts
+          path: output/
