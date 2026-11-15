@@ -68,7 +68,7 @@ jobs:
                   data={
                       "access_token": token,
                       "caption": "RK Gautam AI Agent - First Test Photo",
-                      "published": "false"
+                      "published": "true"
                   },
                   files={"source": photo},
                   timeout=120
