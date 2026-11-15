@@ -6,51 +6,66 @@ from pathlib import Path
 now = datetime.now(ZoneInfo("Asia/Kolkata"))
 today = now.strftime("%Y-%m-%d")
 
-topics = [
-    ("Motivation", "हार मत मानो, मेहनत का फल जरूर मिलेगा।"),
-    ("Comedy", "जब Salary आती है और EMI पहले ही इंतजार कर रही होती है! 😂"),
-    ("Daily Life", "छोटी-छोटी खुशियों से ही जिंदगी खूबसूरत बनती है।"),
-    ("Success", "आज की मेहनत कल की पहचान बनेगी।"),
-    ("Good Morning", "नई सुबह, नई उम्मीद और नई शुरुआत। 🌅"),
-    ("Life", "मुश्किल वक्त हमें मजबूत बनाता है।"),
-    ("Inspiration", "अपने सपनों को कभी छोटा मत समझो।")
+content = [
+    {
+        "time": "08:00",
+        "topic": "Good Morning",
+        "caption": "नई सुबह, नए सपने और नई उम्मीद। 🌅",
+        "hook": "हर सुबह एक नया मौका लेकर आती है!"
+    },
+    {
+        "time": "12:00",
+        "topic": "Motivation",
+        "caption": "मेहनत कभी बेकार नहीं जाती। 💪",
+        "hook": "सफल होना है तो ये बात याद रखना!"
+    },
+    {
+        "time": "17:00",
+        "topic": "Daily Life",
+        "caption": "जिंदगी की छोटी खुशियाँ ही असली दौलत हैं। ❤️",
+        "hook": "जिंदगी की एक सच्ची बात सुनिए!"
+    },
+    {
+        "time": "20:00",
+        "topic": "Comedy",
+        "caption": "Salary आते ही EMI का मैसेज आ गया! 😂",
+        "hook": "जब Salary और EMI एक ही दिन मिलें!"
+    }
 ]
-
-index = now.toordinal() % len(topics)
-topic, caption = topics[index]
-
-post = f"""RK Gautam | {today}
-
-{caption}
-
-❤️ पसंद आए तो Follow करें।
-
-#RKGautam #HindiReels #DigitalCreator
-#{topic.replace(" ", "")}
-"""
-
-reel_script = f"""Today's Reel: {topic}
-
-HOOK: क्या आपके साथ भी ऐसा होता है?
-
-MESSAGE: {caption}
-
-ENDING: ऐसी और Videos के लिए Follow करें।
-
-Format: Vertical 9:16
-Target duration: 15-20 seconds
-"""
 
 folder = Path("output")
 folder.mkdir(exist_ok=True)
 
-(folder / "facebook_post.txt").write_text(
-    post, encoding="utf-8"
-)
+for i, item in enumerate(content, start=1):
+    post = f"""RK Gautam | {today}
+Time: {item['time']} IST
 
-(folder / "reel_script.txt").write_text(
-    reel_script, encoding="utf-8"
-)
+{item['caption']}
 
-print("Daily content generated successfully!")
-print(post)
+Follow RK Gautam ❤️
+#RKGautam #HindiContent
+"""
+
+    reel = f"""RK Gautam Reel {i}
+Topic: {item['topic']}
+Time: {item['time']} IST
+
+HOOK: {item['hook']}
+
+STORY: {item['caption']}
+
+ENDING: Follow for more!
+
+Format: 9:16
+Duration: 15-20 seconds
+"""
+
+    (folder / f"post_{i}.txt").write_text(
+        post, encoding="utf-8"
+    )
+
+    (folder / f"reel_{i}.txt").write_text(
+        reel, encoding="utf-8"
+    )
+
+print("4 Posts and 4 Reel scripts generated!")
