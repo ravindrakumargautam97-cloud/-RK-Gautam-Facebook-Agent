@@ -2,11 +2,16 @@
 import asyncio
 import subprocess
 from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import edge_tts
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-# Folders
+# ==========================================
+# RK GAUTAM DAILY AI AGENT
+# ==========================================
+
 OUT = Path("output")
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -15,7 +20,10 @@ ASSETS = Path("assets")
 FONT = "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf"
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-# Daily content ideas
+# ==========================================
+# CONTENT CATEGORIES
+# ==========================================
+
 IDEAS = [
     (
         "GOOD MORNING",
@@ -63,12 +71,178 @@ IDEAS = [
     )
 ]
 
+# ==========================================
+# DAILY HINDI QUOTE BANK
+# ==========================================
+
+QUOTE_BANK = {
+    "GOOD MORNING": [
+        [
+            "नई सुबह नया संदेश लाई है,",
+            "उम्मीदों की किरण मुस्कुराई है,",
+            "हर दिन कुछ अच्छा करते चलो,",
+            "जिंदगी फिर खुशियाँ लाई है।"
+        ],
+        [
+            "सूरज की किरणें आई हैं,",
+            "नई उम्मीदें साथ लाई हैं,",
+            "मुस्कुराकर दिन की शुरुआत करो,",
+            "खुशियों ने बाहें फैलाई हैं।"
+        ],
+        [
+            "आज का दिन नया अवसर है,",
+            "हर कोशिश में एक नया सफर है,",
+            "मेहनत से सपने सच होंगे,",
+            "विश्वास ही सबसे बड़ी ताकत है।"
+        ],
+        [
+            "हर सुबह नई उम्मीद जगाती है,",
+            "हर किरण नया रास्ता दिखाती है,",
+            "दिल में विश्वास बनाए रखो,",
+            "जिंदगी खुशियाँ लेकर आती है।"
+        ],
+        [
+            "सुबह की हवा कुछ कहती है,",
+            "नई ऊर्जा मन में भरती है,",
+            "आज फिर कुछ अच्छा करना है,",
+            "यही सोच आगे बढ़ाती है।"
+        ]
+    ],
+
+    "MOTIVATION": [
+        [
+            "मुश्किल रास्तों से मत डरना,",
+            "हर चुनौती का सामना करना,",
+            "जो मेहनत से आगे बढ़ता है,",
+            "उसे मंजिल जरूर मिलती है।"
+        ],
+        [
+            "हार से कभी घबराना नहीं,",
+            "सपनों को कभी भुलाना नहीं,",
+            "आज की मेहनत रंग लाएगी,",
+            "बस कोशिश करना छोड़ना नहीं।"
+        ],
+        [
+            "अपने लक्ष्य पर नजर रखना,",
+            "हर दिन खुद को बेहतर करना,",
+            "सफलता मेहनत से मिलती है,",
+            "बस आगे बढ़ते रहना।"
+        ],
+        [
+            "सपनों को सच करना है,",
+            "तो मेहनत से रिश्ता रखना है,",
+            "आज मुश्किल जरूर होगी,",
+            "कल सफलता का दिन होगा।"
+        ],
+        [
+            "जो गिरकर फिर उठ जाता है,",
+            "वही इतिहास बनाता है,",
+            "हिम्मत कभी मत हारना,",
+            "वक्त सबको मौका देता है।"
+        ]
+    ],
+
+    "EMOTIONAL": [
+        [
+            "कुछ रिश्ते दिल में बस जाते हैं,",
+            "कुछ लोग यादों में रह जाते हैं,",
+            "दूर होकर भी अपने लगते हैं,",
+            "और हर पल याद आते हैं।"
+        ],
+        [
+            "वक्त बदलता रहता है,",
+            "दिल सब कुछ सहता रहता है,",
+            "कुछ यादें कभी नहीं मिटतीं,",
+            "इंसान उन्हें संजोए रखता है।"
+        ],
+        [
+            "हर मुस्कान के पीछे कहानी है,",
+            "हर आँख में कुछ निशानी है,",
+            "जिंदगी का यही सफर है,",
+            "कुछ खुशी और कुछ परेशानी है।"
+        ],
+        [
+            "कुछ लोग दूर चले जाते हैं,",
+            "लेकिन दिल में रह जाते हैं,",
+            "यादें कभी खत्म नहीं होतीं,",
+            "बस आँखें नम कर जाती हैं।"
+        ],
+        [
+            "जिंदगी हर दिन कुछ सिखाती है,",
+            "कभी हँसाती कभी रुलाती है,",
+            "जो अपने दिल के करीब होते हैं,",
+            "उनकी याद हमेशा आती है।"
+        ]
+    ],
+
+    "TRAVEL": [
+        [
+            "नए रास्तों पर चलते जाओ,",
+            "दुनिया की खूबसूरती देखते जाओ,",
+            "हर सफर कुछ सिखाता है,",
+            "नई यादें बनाते जाओ।"
+        ],
+        [
+            "पहाड़ों की हवा कुछ कहती है,",
+            "नदियों की धारा बहती है,",
+            "सफर में सुकून मिलता है,",
+            "प्रकृति दिल के करीब रहती है।"
+        ],
+        [
+            "मंजिल से सुंदर रास्ते हैं,",
+            "हर मोड़ पर नए वास्ते हैं,",
+            "चलते रहो खुले आसमान में,",
+            "सफर ही जिंदगी के किस्से हैं।"
+        ],
+        [
+            "चलो कहीं दूर निकल जाएँ,",
+            "नई दुनिया से मिलकर आएँ,",
+            "पहाड़ों और वादियों में,",
+            "कुछ खूबसूरत पल बिताएँ।"
+        ],
+        [
+            "खुले आसमान के नीचे चलना,",
+            "हर रास्ते से कुछ सीखना,",
+            "दुनिया बहुत खूबसूरत है,",
+            "बस उसे दिल से देखना।"
+        ]
+    ]
+}
+
+
+# ==========================================
+# SELECT DAILY QUOTES
+# ==========================================
+
+def get_daily_quotes(title, original_lines):
+    choices = QUOTE_BANK.get(title)
+
+    if not choices:
+        return original_lines
+
+    today = datetime.now(
+        ZoneInfo("Asia/Kolkata")
+    ).date()
+
+    index = today.toordinal() % len(choices)
+
+    return choices[index]
+
+
+# ==========================================
+# COMMAND RUNNER
+# ==========================================
 
 def run(command):
     subprocess.run(command, check=True)
 
 
+# ==========================================
+# CREATE POSTER
+# ==========================================
+
 def make_poster(background, destination, size, title, lines):
+
     with Image.open(background) as source:
         img = ImageOps.fit(
             source.convert("RGB"),
@@ -77,7 +251,13 @@ def make_poster(background, destination, size, title, lines):
         )
 
     img = img.convert("RGBA")
-    overlay = Image.new("RGBA", size, (0, 0, 0, 0))
+
+    overlay = Image.new(
+        "RGBA",
+        size,
+        (0, 0, 0, 0)
+    )
+
     draw = ImageDraw.Draw(overlay)
 
     w, h = size
@@ -94,13 +274,18 @@ def make_poster(background, destination, size, title, lines):
     )
 
     title_font = ImageFont.truetype(
-        FONT_BOLD, int(w * 0.046)
+        FONT_BOLD,
+        int(w * 0.046)
     )
+
     hindi_font = ImageFont.truetype(
-        FONT, int(w * 0.046)
+        FONT,
+        int(w * 0.046)
     )
+
     brand_font = ImageFont.truetype(
-        FONT_BOLD, int(w * 0.032)
+        FONT_BOLD,
+        int(w * 0.032)
     )
 
     draw.text(
@@ -113,7 +298,10 @@ def make_poster(background, destination, size, title, lines):
 
     for idx, line in enumerate(lines):
         draw.text(
-            (w // 2, int(h * (0.43 + idx * 0.072))),
+            (
+                w // 2,
+                int(h * (0.43 + idx * 0.072))
+            ),
             line,
             font=hindi_font,
             anchor="mm",
@@ -133,7 +321,8 @@ def make_poster(background, destination, size, title, lines):
     )
 
     final_img = Image.alpha_composite(
-        img, overlay
+        img,
+        overlay
     ).convert("RGB")
 
     final_img.save(
@@ -142,16 +331,27 @@ def make_poster(background, destination, size, title, lines):
     )
 
 
+# ==========================================
+# CREATE HINDI AI VOICE
+# ==========================================
+
 async def create_voice(text, path):
+
     voice = edge_tts.Communicate(
         text,
         "hi-IN-MadhurNeural",
         rate="-8%"
     )
+
     await voice.save(str(path))
 
 
+# ==========================================
+# GET AUDIO DURATION
+# ==========================================
+
 def get_duration(path):
+
     result = subprocess.check_output(
         [
             "ffprobe",
@@ -167,10 +367,25 @@ def get_duration(path):
     return float(result.strip())
 
 
+# ==========================================
+# MAIN AGENT
+# ==========================================
+
 async def main():
+
+    today = datetime.now(
+        ZoneInfo("Asia/Kolkata")
+    ).strftime("%d-%m-%Y")
+
+    print(f"RK GAUTAM DAILY AI AGENT: {today}")
+
     for i, (title, bg_name, music_name, lines) in enumerate(
-        IDEAS, start=1
+        IDEAS,
+        start=1
     ):
+
+        # Select today's quotes
+        lines = get_daily_quotes(title, lines)
 
         background = (
             ASSETS / "backgrounds" / f"{bg_name}.jpg"
@@ -215,7 +430,7 @@ async def main():
             lines
         )
 
-        # Generate Hindi AI voice
+        # Create Hindi voice
         await create_voice(
             " ".join(lines),
             voice_file
@@ -228,7 +443,7 @@ async def main():
 
         fade_start = length - 1
 
-        # Generate reel with background music
+        # Generate MP4 Reel
         run([
             "ffmpeg",
             "-y",
@@ -272,7 +487,7 @@ async def main():
             str(video)
         ])
 
-        # Generate caption
+        # Create Facebook caption
         caption = (
             f"{title}\n\n"
             + "\n".join(lines)
