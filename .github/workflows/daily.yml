@@ -4,7 +4,7 @@ name: RK Gautam Daily AI Agent
 on:
   workflow_dispatch:
   schedule:
-    # Every day at 8:00 AM IST (2:30 AM UTC)
+    # Daily 8:00 AM IST = 2:30 AM UTC
     - cron: '30 2 * * *'
 
 permissions:
@@ -47,6 +47,46 @@ jobs:
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
         run: |
           python -c "import os; assert os.getenv('FACEBOOK_PAGE_ID'), 'Page ID missing'; assert os.getenv('FACEBOOK_PAGE_ACCESS_TOKEN'), 'Token missing'; print('Facebook configuration found')"
+
+      - name: Post One Test Photo to Facebook
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os
+          import requests
+
+          page_id = os.environ["FACEBOOK_PAGE_ID"]
+          token = os.environ["FACEBOOK_PAGE_ACCESS_TOKEN"]
+          photo_path = "output/post_1.png"
+
+          with open(photo_path, "rb") as photo:
+              response = requests.post(
+                  f"https://graph.facebook.com/v27.0/{page_id}/photos",
+                  data={
+                      "access_token": token,
+                      "caption": "RK Gautam AI Agent - First Test Photo",
+                      "published": "false"
+                  },
+                  files={"source": photo},
+                  timeout=120
+              )
+
+          result = response.json()
+
+          if not response.ok:
+              raise RuntimeError(
+                  "Facebook API error: "
+                  + result.get("error", {}).get(
+                      "message", "Unknown error"
+                  )
+              )
+
+          print("Facebook test photo uploaded successfully")
+          print("Photo ID:", result.get("id"))
+          PY
 
       - name: Save Generated Content
         if: always()
