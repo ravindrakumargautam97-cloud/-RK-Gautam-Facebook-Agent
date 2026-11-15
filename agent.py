@@ -128,9 +128,7 @@ async def main():
     for i, (title, bg_name, music_name, lines) in enumerate(
         IDEAS, start=1
     ):
-        background = ASSETS / "backgrounds" / f"{bg_name}.jpg"
-        music = ASSETS / "music" / f"{music_name}.mp3"
-
+background = ASSETS / "backgrounds" / f"{bg_name}-jpg"
         if not background.is_file():
             raise FileNotFoundError(f"Missing: {background}")
 
