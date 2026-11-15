@@ -13,6 +13,7 @@ permissions:
 jobs:
   daily-content:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout Repository
@@ -23,11 +24,18 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Generate Daily Content
+      - name: Install Tools
+        run: |
+          python -m pip install Pillow
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Generate Photos and Reels
         run: python agent.py
 
       - name: Save Generated Content
         uses: actions/upload-artifact@v4
         with:
-          name: daily-facebook-posts
+          name: rk-gautam-photos-reels
           path: output/
+          retention-days: 7
