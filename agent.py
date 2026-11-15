@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import edge_tts
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+
 # ==========================================
 # RK GAUTAM DAILY AI AGENT
 # ==========================================
@@ -19,6 +20,7 @@ ASSETS = Path("assets")
 
 FONT = "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf"
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
 
 # ==========================================
 # CONTENT CATEGORIES
@@ -70,6 +72,7 @@ IDEAS = [
         ]
     )
 ]
+
 
 # ==========================================
 # DAILY HINDI QUOTE BANK
@@ -332,18 +335,66 @@ def make_poster(background, destination, size, title, lines):
 
 
 # ==========================================
-# CREATE HINDI AI VOICE
+# CREATE HINDI AI VOICE WITH RETRY
 # ==========================================
 
 async def create_voice(text, path):
 
-    voice = edge_tts.Communicate(
-        text,
+    voices = [
         "hi-IN-MadhurNeural",
-        rate="-8%"
-    )
+        "hi-IN-SwaraNeural"
+    ]
 
-    await voice.save(str(path))
+    for attempt in range(1, 5):
+
+        voice_name = voices[
+            (attempt - 1) % len(voices)
+        ]
+
+        try:
+            print(
+                f"Voice attempt {attempt}/4: {voice_name}",
+                flush=True
+            )
+
+            if path.exists():
+                path.unlink()
+
+            voice = edge_tts.Communicate(
+                text,
+                voice_name,
+                rate="-8%"
+            )
+
+            await voice.save(str(path))
+
+            if (
+                path.exists()
+                and path.stat().st_size > 0
+            ):
+                print(
+                    "Hindi voice created successfully!",
+                    flush=True
+                )
+                return
+
+            raise RuntimeError(
+                "Generated audio file is empty"
+            )
+
+        except Exception as error:
+
+            print(
+                f"Voice attempt {attempt} failed: {error}",
+                flush=True
+            )
+
+            if attempt == 4:
+                raise RuntimeError(
+                    "Hindi voice failed after 4 attempts"
+                ) from error
+
+            await asyncio.sleep(attempt * 5)
 
 
 # ==========================================
@@ -377,7 +428,10 @@ async def main():
         ZoneInfo("Asia/Kolkata")
     ).strftime("%d-%m-%Y")
 
-    print(f"RK GAUTAM DAILY AI AGENT: {today}")
+    print(
+        f"RK GAUTAM DAILY AI AGENT: {today}",
+        flush=True
+    )
 
     for i, (title, bg_name, music_name, lines) in enumerate(
         IDEAS,
@@ -410,9 +464,12 @@ async def main():
         voice_file = OUT / f"voice_{i}.mp3"
         video = OUT / f"reel_{i}.mp4"
 
-        print(f"Creating content {i}: {title}")
+        print(
+            f"Creating content {i}: {title}",
+            flush=True
+        )
 
-        # Create Facebook photo
+        # Create Facebook Photo
         make_poster(
             background,
             photo,
@@ -421,7 +478,7 @@ async def main():
             lines
         )
 
-        # Create vertical reel cover
+        # Create Vertical Reel Cover
         make_poster(
             background,
             cover,
@@ -430,7 +487,7 @@ async def main():
             lines
         )
 
-        # Create Hindi voice
+        # Generate Hindi AI Voice
         await create_voice(
             " ".join(lines),
             voice_file
@@ -487,7 +544,7 @@ async def main():
             str(video)
         ])
 
-        # Create Facebook caption
+        # Generate Facebook Caption
         caption = (
             f"{title}\n\n"
             + "\n".join(lines)
@@ -505,11 +562,13 @@ async def main():
         )
 
         print(
-            f"SUCCESS: Created {photo} and {video}"
+            f"SUCCESS: Created {photo} and {video}",
+            flush=True
         )
 
     print(
-        "SUCCESS: 4 Photos + 4 Hindi Voice Reels!"
+        "SUCCESS: 4 Photos + 4 Hindi Voice Reels!",
+        flush=True
     )
 
 
