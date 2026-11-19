@@ -8,7 +8,7 @@ on:
         description: "Select posting time (IST)"
         required: true
         type: choice
-        default: "10:00"
+        default: "08:00"
         options:
           - "08:00"
           - "10:00"
@@ -20,14 +20,14 @@ on:
           - "21:00"
 
   schedule:
-    - cron: '30 2 * * *'   # 08:00 IST
-    - cron: '30 4 * * *'   # 10:00 IST
-    - cron: '30 6 * * *'   # 12:00 IST
-    - cron: '30 8 * * *'   # 14:00 IST
-    - cron: '30 10 * * *'  # 16:00 IST
-    - cron: '30 12 * * *'  # 18:00 IST
-    - cron: '0 14 * * *'   # 19:30 IST
-    - cron: '30 15 * * *'  # 21:00 IST
+    - cron: '30 2 * * *'
+    - cron: '30 4 * * *'
+    - cron: '30 6 * * *'
+    - cron: '30 8 * * *'
+    - cron: '30 10 * * *'
+    - cron: '30 12 * * *'
+    - cron: '0 14 * * *'
+    - cron: '30 15 * * *'
 
 permissions:
   contents: write
@@ -42,9 +42,10 @@ jobs:
     timeout-minutes: 30
 
     env:
-      AUTO_PUBLISH: "false"
+      AUTO_PUBLISH: "true"
 
     steps:
+
       # STEP 1 - CHECKOUT
 
       - name: Checkout Repository
@@ -53,7 +54,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      # STEP 2 - PYTHON
+      # STEP 2 - SETUP PYTHON
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -118,6 +119,7 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
         run: |
           python - <<'PY'
+          import base64
           import json
           import os
           from pathlib import Path
@@ -133,20 +135,23 @@ jobs:
 
           response = requests.get(
               url,
-              params={
-                  "ref": "facebook-posting-history"
-              },
+              params={"ref": "facebook-posting-history"},
               headers={
                   "Authorization": f"Bearer {token}",
-                  "Accept": "application/vnd.github.raw+json",
+                  "Accept": "application/vnd.github+json",
                   "X-GitHub-Api-Version": "2022-11-28",
               },
               timeout=30,
           )
 
           response.raise_for_status()
+          result = response.json()
 
-          history = response.json()
+          history = json.loads(
+              base64.b64decode(
+                  result["content"]
+              ).decode("utf-8")
+          )
 
           if not isinstance(history, dict):
               raise RuntimeError(
@@ -170,10 +175,7 @@ jobs:
 
       - name: Check Asset Files
         run: |
-          echo "Checking backgrounds"
           ls -lh assets/backgrounds/
-
-          echo "Checking music"
           ls -lh assets/music/
 
       # STEP 7 - GENERATE CONTENT
@@ -181,7 +183,7 @@ jobs:
       - name: Generate Photos and Reels
         run: python agent.py
 
-      # STEP 8 - VERIFY FILES
+      # STEP 8 - VERIFY GENERATED FILES
 
       - name: Verify Generated Files
         run: |
@@ -207,9 +209,7 @@ jobs:
                   print("Ready:", path)
           PY
 
-      # STEP 9 - CONTROLLED LIVE REEL TEST
-      # Only manual 10:00 is live.
-      # All scheduled runs remain dry runs.
+      # STEP 9 - AUTOMATIC FACEBOOK POSTING
 
       - name: Publish Scheduled Item
         env:
@@ -218,7 +218,7 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
-          DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.post_slot != '10:00' }}
+          DRY_RUN: ${{ github.event_name != 'schedule' || env.AUTO_PUBLISH != 'true' }}
         run: python daily_post.py
 
       # STEP 10 - SAVE GENERATED CONTENT
