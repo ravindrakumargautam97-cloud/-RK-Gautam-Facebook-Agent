@@ -1,4 +1,3 @@
-
 {
   "TEST_2026-11-19_08-00": {
     "date": "2026-11-19",
@@ -22,5 +21,14 @@
     "type": "reel",
     "number": 1,
     "status": "published"
+  },
+  "2026-11-20_21-00": {
+    "date": "2026-11-20",
+    "slot": "21:00",
+    "type": "reel",
+    "number": 4,
+    "status": "reserved",
+    "github_run_id": "44631232327",
+    "updated_at": "2026-11-20T04:14:24.875876+05:30"
   }
 }
