@@ -20,18 +20,17 @@ on:
           - "21:00"
 
   schedule:
-    # Times below are UTC, corresponding to IST
-    - cron: '30 2 * * *'   # 08:00 IST
-    - cron: '30 4 * * *'   # 10:00 IST
-    - cron: '30 6 * * *'   # 12:00 IST
-    - cron: '30 8 * * *'   # 14:00 IST
-    - cron: '30 10 * * *'  # 16:00 IST
-    - cron: '30 12 * * *'  # 18:00 IST
-    - cron: '0 14 * * *'   # 19:30 IST
-    - cron: '30 15 * * *'  # 21:00 IST
+    - cron: '30 2 * * *'
+    - cron: '30 4 * * *'
+    - cron: '30 6 * * *'
+    - cron: '30 8 * * *'
+    - cron: '30 10 * * *'
+    - cron: '30 12 * * *'
+    - cron: '0 14 * * *'
+    - cron: '30 15 * * *'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: rk-gautam-facebook-agent
@@ -48,6 +47,9 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -100,6 +102,59 @@ jobs:
           print("Selected IST slot:", slot)
           PY
 
+      - name: Load Posting History
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          import requests
+
+          repo = os.environ["GH_REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+
+          url = (
+              f"https://api.github.com/repos/{repo}"
+              "/contents/posting_history.json"
+          )
+
+          response = requests.get(
+              url,
+              params={"ref": "facebook-posting-history"},
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/vnd.github.raw+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+              timeout=30,
+          )
+
+          response.raise_for_status()
+
+          history = response.json()
+
+          if not isinstance(history, dict):
+              raise RuntimeError(
+                  "Posting history must be a JSON object"
+              )
+
+          Path("posting_history.json").write_text(
+              json.dumps(
+                  history,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print("Posting history loaded successfully")
+          print("History records:", len(history))
+          PY
+
       - name: Check Asset Files
         run: |
           ls -lh assets/backgrounds/
@@ -137,7 +192,7 @@ jobs:
           POST_SLOT: ${{ steps.slot.outputs.slot }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
-          DRY_RUN: ${{ env.AUTO_PUBLISH != 'true' || github.event_name != 'schedule' }}
+          DRY_RUN: "true"
         run: python daily_post.py
 
       - name: Save Generated Content
