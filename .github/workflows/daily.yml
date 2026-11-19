@@ -8,7 +8,7 @@ on:
         description: "Select posting time (IST)"
         required: true
         type: choice
-        default: "08:00"
+        default: "10:00"
         options:
           - "08:00"
           - "10:00"
@@ -20,7 +20,6 @@ on:
           - "21:00"
 
   schedule:
-    # UTC times corresponding to IST
     - cron: '30 2 * * *'   # 08:00 IST
     - cron: '30 4 * * *'   # 10:00 IST
     - cron: '30 6 * * *'   # 12:00 IST
@@ -46,9 +45,7 @@ jobs:
       AUTO_PUBLISH: "false"
 
     steps:
-      # ======================================
-      # CHECKOUT REPOSITORY
-      # ======================================
+      # STEP 1 - CHECKOUT
 
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -56,18 +53,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      # ======================================
-      # SETUP PYTHON
-      # ======================================
+      # STEP 2 - PYTHON
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      # ======================================
-      # INSTALL DEPENDENCIES
-      # ======================================
+      # STEP 3 - INSTALL TOOLS
 
       - name: Install Tools
         run: |
@@ -76,9 +69,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-noto-core
 
-      # ======================================
-      # DETERMINE POSTING SLOT
-      # ======================================
+      # STEP 4 - DETERMINE POSTING SLOT
 
       - name: Determine Posting Slot
         id: slot
@@ -119,9 +110,7 @@ jobs:
           print("Selected IST slot:", slot)
           PY
 
-      # ======================================
-      # LOAD POSTING HISTORY
-      # ======================================
+      # STEP 5 - LOAD POSTING HISTORY
 
       - name: Load Posting History
         env:
@@ -132,7 +121,6 @@ jobs:
           import json
           import os
           from pathlib import Path
-
           import requests
 
           repo = os.environ["GH_REPOSITORY"]
@@ -174,33 +162,26 @@ jobs:
               encoding="utf-8",
           )
 
-          print(
-              "Posting history loaded successfully"
-          )
-          print(
-              "History records:", len(history)
-          )
+          print("Posting history loaded successfully")
+          print("History records:", len(history))
           PY
 
-      # ======================================
-      # CHECK ASSETS
-      # ======================================
+      # STEP 6 - CHECK ASSETS
 
       - name: Check Asset Files
         run: |
+          echo "Checking backgrounds"
           ls -lh assets/backgrounds/
+
+          echo "Checking music"
           ls -lh assets/music/
 
-      # ======================================
-      # GENERATE CONTENT
-      # ======================================
+      # STEP 7 - GENERATE CONTENT
 
       - name: Generate Photos and Reels
         run: python agent.py
 
-      # ======================================
-      # VERIFY GENERATED FILES
-      # ======================================
+      # STEP 8 - VERIFY FILES
 
       - name: Verify Generated Files
         run: |
@@ -226,9 +207,9 @@ jobs:
                   print("Ready:", path)
           PY
 
-      # ======================================
-      # CONTROLLED LIVE PHOTO TEST
-      # ======================================
+      # STEP 9 - CONTROLLED LIVE REEL TEST
+      # Only manual 10:00 is live.
+      # All scheduled runs remain dry runs.
 
       - name: Publish Scheduled Item
         env:
@@ -237,12 +218,10 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
-          DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.post_slot != '08:00' }}
+          DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.post_slot != '10:00' }}
         run: python daily_post.py
 
-      # ======================================
-      # SAVE GENERATED CONTENT
-      # ======================================
+      # STEP 10 - SAVE GENERATED CONTENT
 
       - name: Save Generated Content
         if: always()
