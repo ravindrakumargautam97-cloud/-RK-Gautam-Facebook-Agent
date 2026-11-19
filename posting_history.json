@@ -11,8 +11,8 @@
     "slot": "08:00",
     "type": "photo",
     "number": 1,
-    "status": "reserved",
+    "status": "needs_review",
     "github_run_id": "44570065317",
-    "updated_at": "2026-11-19T22:18:47.675509+05:30"
+    "updated_at": "2026-11-19T22:18:49.086675+05:30"
   }
 }
