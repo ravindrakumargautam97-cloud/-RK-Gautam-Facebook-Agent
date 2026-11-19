@@ -3,12 +3,26 @@ name: RK Gautam Daily AI Agent
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Test only? true = no Facebook posts"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
   schedule:
-    # Daily 8:00 AM IST = 2:30 AM UTC
+    # Daily 8:00 AM IST = 02:30 UTC
     - cron: '30 2 * * *'
 
 permissions:
   contents: read
+
+concurrency:
+  group: rk-gautam-facebook-publishing
+  cancel-in-progress: false
 
 jobs:
   daily-content:
@@ -16,20 +30,28 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # STEP 1 - Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # STEP 2 - Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
+      # STEP 3 - Install dependencies
       - name: Install Tools
         run: |
+          python -m pip install --upgrade pip
           python -m pip install Pillow edge-tts requests
+
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-noto-core
 
+          ffmpeg -version
+
+      # STEP 4 - Check background and music
       - name: Check Asset Files
         run: |
           echo "Checking background images"
@@ -38,56 +60,75 @@ jobs:
           echo "Checking music files"
           ls -lh assets/music/
 
+      # STEP 5 - Generate photos and reels
       - name: Generate Photos and Reels
-        run: python agent.py
-
-      - name: Test Facebook Posting Setup
-        env:
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
         run: |
-          python -c "import os; assert os.getenv('FACEBOOK_PAGE_ID'), 'Page ID missing'; assert os.getenv('FACEBOOK_PAGE_ACCESS_TOKEN'), 'Token missing'; print('Facebook configuration found')"
+          python agent.py
 
-      - name: Post One Test Photo to Facebook
-        if: github.event_name == 'workflow_dispatch'
+      # STEP 6 - Verify generated content
+      - name: Verify Generated Files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          output = Path("output")
+
+          for i in range(1, 5):
+              files = [
+                  output / f"post_{i}.png",
+                  output / f"reel_{i}.mp4",
+                  output / f"caption_{i}.txt",
+              ]
+
+              for file in files:
+                  if not file.is_file():
+                      raise FileNotFoundError(
+                          f"Missing file: {file}"
+                      )
+
+                  if file.stat().st_size == 0:
+                      raise RuntimeError(
+                          f"Empty file: {file}"
+                      )
+
+                  print(f"Ready: {file}")
+
+          print("All 4 photos and 4 reels ready!")
+          PY
+
+      # STEP 7 - Check Facebook credentials
+      - name: Check Facebook Configuration
         env:
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
         run: |
           python - <<'PY'
           import os
-          import requests
 
-          page_id = os.environ["FACEBOOK_PAGE_ID"]
-          token = os.environ["FACEBOOK_PAGE_ACCESS_TOKEN"]
-          photo_path = "output/post_1.png"
+          page_id = os.getenv("FACEBOOK_PAGE_ID")
+          token = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
 
-          with open(photo_path, "rb") as photo:
-              response = requests.post(
-                  f"https://graph.facebook.com/v27.0/{page_id}/photos",
-                  data={
-                      "access_token": token,
-                      "caption": "RK Gautam AI Agent - First Test Photo",
-                      "published": "true"
-                  },
-                  files={"source": photo},
-                  timeout=120
-              )
+          if not page_id:
+              raise RuntimeError("FACEBOOK_PAGE_ID missing")
 
-          result = response.json()
-
-          if not response.ok:
+          if not token:
               raise RuntimeError(
-                  "Facebook API error: "
-                  + result.get("error", {}).get(
-                      "message", "Unknown error"
-                  )
+                  "FACEBOOK_PAGE_ACCESS_TOKEN missing"
               )
 
-          print("Facebook test photo uploaded successfully")
-          print("Photo ID:", result.get("id"))
+          print("Facebook configuration successful")
           PY
 
+      # STEP 8 - Process Facebook photos and reels
+      - name: Process Facebook Photos and Reels
+        env:
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'true' }}
+        run: |
+          python facebook_post.py
+
+      # STEP 9 - Save generated files
       - name: Save Generated Content
         if: always()
         uses: actions/upload-artifact@v4
