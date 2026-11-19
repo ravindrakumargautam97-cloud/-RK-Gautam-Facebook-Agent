@@ -5,5 +5,14 @@
     "type": "test",
     "status": "reserved",
     "test_only": true
+  },
+  "2026-11-19_08-00": {
+    "date": "2026-11-19",
+    "slot": "08:00",
+    "type": "photo",
+    "number": 1,
+    "status": "reserved",
+    "github_run_id": "44570065317",
+    "updated_at": "2026-11-19T22:18:47.675509+05:30"
   }
 }
