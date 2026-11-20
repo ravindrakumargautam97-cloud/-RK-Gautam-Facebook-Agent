@@ -45,6 +45,7 @@ jobs:
       AUTO_PUBLISH: "false"
 
     steps:
+
       # STEP 1 - CHECKOUT
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -200,7 +201,7 @@ jobs:
                   print("Ready:", path)
           PY
 
-      # STEP 9 - FACEBOOK POSTING
+      # STEP 9 - CONTROLLED FACEBOOK POSTING
       - name: Publish Scheduled Item
         env:
           POST_SLOT: ${{ steps.slot.outputs.slot }}
@@ -208,7 +209,7 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
-          DRY_RUN: ${{ env.AUTO_PUBLISH != 'true' }}
+          DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.post_slot != '08:00' }}
         run: python daily_post.py
 
       # STEP 10 - SAVE GENERATED CONTENT
