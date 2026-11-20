@@ -36,8 +36,8 @@
     "slot": "08:00",
     "type": "photo",
     "number": 1,
-    "status": "reserved",
+    "status": "needs_review",
     "github_run_id": "44718573839",
-    "updated_at": "2026-11-20T15:52:38.780098+05:30"
+    "updated_at": "2026-11-20T15:52:40.370711+05:30"
   }
 }
