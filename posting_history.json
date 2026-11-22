@@ -75,5 +75,14 @@
     "status": "submitted",
     "github_run_id": "45010015669",
     "updated_at": "2026-11-22T15:28:50.805633+05:30"
+  },
+  "2026-11-22_16-00": {
+    "date": "2026-11-22",
+    "slot": "16:00",
+    "type": "photo",
+    "number": 3,
+    "status": "reserved",
+    "github_run_id": "45052216713",
+    "updated_at": "2026-11-22T23:27:36.810905+05:30"
   }
 }
