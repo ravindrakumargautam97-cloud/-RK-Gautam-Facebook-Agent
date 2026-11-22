@@ -66,5 +66,14 @@
     "status": "needs_review",
     "github_run_id": "45006078086",
     "updated_at": "2026-11-22T14:39:26.341558+05:30"
+  },
+  "2026-11-22_21-00": {
+    "date": "2026-11-22",
+    "slot": "21:00",
+    "type": "reel",
+    "number": 4,
+    "status": "reserved",
+    "github_run_id": "45010015669",
+    "updated_at": "2026-11-22T15:28:40.813621+05:30"
   }
 }
