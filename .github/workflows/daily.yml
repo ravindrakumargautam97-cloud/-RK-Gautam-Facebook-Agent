@@ -209,7 +209,7 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
-          DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.post_slot != '10:00' }}
+          DRY_RUN: DRY_RUN: ${{ !((github.event_name == 'schedule' && (steps.slot.outputs.slot == '08:00' || steps.slot.outputs.slot == '12:00' || steps.slot.outputs.slot == '16:00' || steps.slot.outputs.slot == '19:30')) || (github.event_name == 'workflow_dispatch' && inputs.post_slot == '10:00')) }}
         run: python daily_post.py
 
       # STEP 10 - SAVE GENERATED CONTENT
