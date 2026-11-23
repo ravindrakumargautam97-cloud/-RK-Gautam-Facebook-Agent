@@ -3,12 +3,11 @@ import base64
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
-
 
 # ==========================================
 # RK GAUTAM FACEBOOK DAILY POSTING AGENT
@@ -28,31 +27,23 @@ SLOTS = {
 OUTPUT = Path("output")
 BRANCH = "facebook-posting-history"
 HISTORY_FILE = "posting_history.json"
-
 IST = ZoneInfo("Asia/Kolkata")
 
+# GitHub scheduled workflows may start late.
+MAX_DELAY_MINUTES = 90
 
-# ==========================================
-# DATE AND TIME
-# ==========================================
 
 def now_ist():
-    return datetime.now(IST).isoformat()
+    return datetime.now(IST)
 
 
-def today_ist():
-    return datetime.now(IST).strftime("%Y-%m-%d")
+def now_string():
+    return now_ist().isoformat()
 
-
-# ==========================================
-# GITHUB API
-# ==========================================
 
 def github_headers():
-    token = os.environ["GH_TOKEN"]
-
     return {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
@@ -60,7 +51,6 @@ def github_headers():
 
 def history_url():
     repo = os.environ["GH_REPOSITORY"]
-
     return (
         f"https://api.github.com/repos/{repo}"
         f"/contents/{HISTORY_FILE}"
@@ -68,7 +58,7 @@ def history_url():
 
 
 # ==========================================
-# READ POSTING HISTORY
+# POSTING HISTORY
 # ==========================================
 
 def read_history():
@@ -78,7 +68,6 @@ def read_history():
         params={"ref": BRANCH},
         timeout=30,
     )
-
     response.raise_for_status()
 
     result = response.json()
@@ -91,15 +80,11 @@ def read_history():
 
     if not isinstance(history, dict):
         raise RuntimeError(
-            "Invalid posting history format"
+            "Posting history must be a JSON object"
         )
 
     return history, result["sha"]
 
-
-# ==========================================
-# SAVE POSTING HISTORY
-# ==========================================
 
 def write_history(history, sha, message):
     content = json.dumps(
@@ -121,24 +106,23 @@ def write_history(history, sha, message):
         },
         timeout=30,
     )
-
     response.raise_for_status()
 
 
-# ==========================================
-# UPDATE POST STATUS
-# ==========================================
-
-def update_status(post_id, status):
+def update_status(post_id, status, facebook_id=None):
     history, sha = read_history()
 
     if post_id not in history:
         raise RuntimeError(
-            f"Reservation missing: {post_id}"
+            f"Missing reservation: {post_id}"
         )
 
-    history[post_id]["status"] = status
-    history[post_id]["updated_at"] = now_ist()
+    record = history[post_id]
+    record["status"] = status
+    record["updated_at"] = now_string()
+
+    if facebook_id:
+        record["facebook_id"] = str(facebook_id)
 
     write_history(
         history,
@@ -146,18 +130,46 @@ def update_status(post_id, status):
         f"Facebook post {post_id}: {status}",
     )
 
-    print(
-        f"Posting history updated: {status}"
-    )
+    print(f"History updated: {status}")
 
 
 # ==========================================
-# MAIN POSTING AGENT
+# VALIDATE POSTING TIME
+# ==========================================
+
+def validate_time(slot):
+    current = now_ist()
+
+    hour, minute = map(int, slot.split(":"))
+
+    scheduled = current.replace(
+        hour=hour,
+        minute=minute,
+        second=0,
+        microsecond=0,
+    )
+
+    delay = current - scheduled
+
+    if delay < timedelta(0):
+        raise RuntimeError(
+            f"Posting slot {slot} has not started yet"
+        )
+
+    if delay > timedelta(minutes=MAX_DELAY_MINUTES):
+        raise RuntimeError(
+            f"Posting slot {slot} is too old"
+        )
+
+    return current
+
+
+# ==========================================
+# MAIN
 # ==========================================
 
 def main():
-
-    slot = os.getenv("POST_SLOT", "")
+    slot = os.getenv("POST_SLOT", "").strip()
 
     dry_run = (
         os.getenv("DRY_RUN", "true").lower()
@@ -165,15 +177,7 @@ def main():
     )
 
     if slot not in SLOTS:
-        sys.exit(
-            f"Invalid POST_SLOT: {slot}"
-        )
-
-    today = today_ist()
-
-    post_id = (
-        f"{today}_{slot.replace(':', '-')}"
-    )
+        sys.exit(f"Invalid POST_SLOT: {slot}")
 
     kind, number = SLOTS[slot]
 
@@ -184,55 +188,46 @@ def main():
     )
 
     media = OUTPUT / filename
-
-    caption_file = (
-        OUTPUT / f"caption_{number}.txt"
-    )
-
-    # ======================================
-    # VERIFY FILES
-    # ======================================
+    caption_file = OUTPUT / f"caption_{number}.txt"
 
     for path in (media, caption_file):
-
         if not path.is_file():
-            sys.exit(
-                f"Missing file: {path}"
-            )
+            raise FileNotFoundError(path)
 
         if path.stat().st_size == 0:
-            sys.exit(
-                f"Empty file: {path}"
-            )
+            raise RuntimeError(f"Empty file: {path}")
 
     caption = caption_file.read_text(
         encoding="utf-8"
     ).strip()
 
     if not caption:
-        sys.exit("Caption is empty")
+        raise RuntimeError("Caption is empty")
 
-    print("=" * 40)
+    current = now_ist()
+    today = current.strftime("%Y-%m-%d")
+    post_id = f"{today}_{slot.replace(':', '-')}"
+
+    print("=" * 45)
     print("RK GAUTAM FACEBOOK AI AGENT")
-    print("=" * 40)
-
-    print("Date:", today)
+    print("=" * 45)
     print("Post ID:", post_id)
     print("Slot:", slot)
-    print("Content:", kind, number)
+    print("Type:", kind)
     print("File:", media)
+    print("DRY RUN:", dry_run)
 
     # ======================================
-    # SAFE DRY RUN
+    # DRY RUN
     # ======================================
 
     if dry_run:
-        print("DRY RUN - Nothing published")
-        print("No posting history changed")
+        print("DRY RUN - No Facebook post")
+        print("Posting history unchanged")
         return
 
     # ======================================
-    # CHECK REQUIRED CREDENTIALS
+    # REQUIRED ENVIRONMENT VARIABLES
     # ======================================
 
     required = (
@@ -243,40 +238,33 @@ def main():
     )
 
     for name in required:
-
         if not os.getenv(name):
-            sys.exit(
+            raise RuntimeError(
                 f"Missing environment variable: {name}"
             )
 
+    # Validate before making any changes.
+    validate_time(slot)
+
     # ======================================
-    # CHECK DUPLICATE HISTORY
+    # DUPLICATE PROTECTION
     # ======================================
 
     history, sha = read_history()
 
     if post_id in history:
+        existing = history[post_id]
 
-        status = history[post_id].get(
-            "status", "unknown"
-        )
-
+        print("Post already recorded")
         print(
-            "Already reserved or processed"
+            "Existing status:",
+            existing.get("status", "unknown")
         )
-
-        print(
-            "Existing status:", status
-        )
-
-        print(
-            "Skipping duplicate:", post_id
-        )
-
+        print("Skipping duplicate:", post_id)
         return
 
     # ======================================
-    # RESERVE BEFORE FACEBOOK REQUEST
+    # RESERVE POST
     # ======================================
 
     history[post_id] = {
@@ -288,7 +276,7 @@ def main():
         "github_run_id": os.getenv(
             "GITHUB_RUN_ID", ""
         ),
-        "updated_at": now_ist(),
+        "updated_at": now_string(),
     }
 
     write_history(
@@ -297,105 +285,76 @@ def main():
         f"Reserve Facebook post {post_id}",
     )
 
-    print(
-        "Reservation saved:", post_id
-    )
+    print("Reservation saved:", post_id)
 
     # ======================================
-    # FACEBOOK PUBLISHING
+    # PUBLISH TO FACEBOOK
     # ======================================
 
     os.environ["DRY_RUN"] = "false"
 
-    from facebook_post import (
-        post_photo,
-        post_reel,
-    )
-
     try:
+        from facebook_post import (
+            post_photo,
+            post_reel,
+        )
 
         if kind == "photo":
+            result = post_photo(media, caption)
+        else:
+            result = post_reel(media, caption)
 
-            post_photo(
-                media,
-                caption,
+        if not isinstance(result, dict):
+            raise RuntimeError(
+                "Invalid Facebook publishing result"
             )
 
-        else:
+        facebook_id = result.get("facebook_id")
 
-            post_reel(
-                media,
-                caption,
+        if not facebook_id:
+            raise RuntimeError(
+                "Facebook ID missing from API result"
             )
 
     except Exception as error:
-
         print(
             "Facebook publishing failed "
-            "or result uncertain."
+            "or outcome is uncertain"
         )
-
-        print(
-            "Error type:",
-            type(error).__name__,
-        )
-
-        # ==================================
-        # MARK NEEDS REVIEW
-        # ==================================
+        print("Error type:", type(error).__name__)
+        print("Error:", error)
 
         try:
-
             update_status(
                 post_id,
                 "needs_review",
             )
-
-            print(
-                "Status saved: needs_review"
-            )
-
         except Exception as history_error:
-
             print(
-                "Could not update "
-                "posting history:",
+                "Could not save review status:",
                 history_error,
             )
 
-            print(
-                "Original reservation "
-                "requires manual review."
-            )
-
-        # Never automatically retry.
         raise
 
     # ======================================
-    # MARK SUCCESSFUL API SUBMISSION
+    # SAVE FACEBOOK SUBMISSION
     # ======================================
 
     update_status(
         post_id,
         "submitted",
+        facebook_id=facebook_id,
     )
 
+    print("Facebook API submission accepted")
+    print("Facebook ID:", facebook_id)
+    print("Status: submitted")
     print(
-        "Facebook API request completed"
+        "Verify Facebook publishing status "
+        "before marking as published"
     )
 
-    print(
-        "Post ID:", post_id
-    )
-
-    print(
-        "Status: submitted"
-    )
-
-
-# ==========================================
-# START AGENT
-# ==========================================
 
 if __name__ == "__main__":
     main()
