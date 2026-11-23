@@ -4,13 +4,15 @@ name: RK Gautam Daily AI Agent
 on:
   workflow_dispatch:
     inputs:
-      post_slot:
+  
+    post_slot:
         description: "Select posting time (IST)"
         required: true
         type: choice
         default: "08:00"
         options:
           - "08:00"
+          - "09:40"
           - "10:00"
           - "12:00"
           - "14:00"
@@ -18,6 +20,7 @@ on:
           - "18:00"
           - "19:30"
           - "21:00"
+
 
   schedule:
     # GitHub cron uses UTC
