@@ -111,5 +111,14 @@
     "status": "needs_review",
     "github_run_id": "45070321851",
     "updated_at": "2026-11-23T02:39:02.188991+05:30"
+  },
+  "2026-11-23_09-40": {
+    "date": "2026-11-23",
+    "slot": "09:40",
+    "type": "photo",
+    "number": 1,
+    "status": "reserved",
+    "github_run_id": "45111216058",
+    "updated_at": "2026-11-23T09:51:03.362366+05:30"
   }
 }
