@@ -21,16 +21,15 @@ on:
           - "21:00"
 
   schedule:
-    # GitHub cron uses UTC
-    # IST = UTC + 05:30
-    - cron: '30 2 * * *'
-    - cron: '30 4 * * *'
-    - cron: '30 6 * * *'
-    - cron: '30 8 * * *'
-    - cron: '30 10 * * *'
-    - cron: '30 12 * * *'
-    - cron: '0 14 * * *'
-    - cron: '30 15 * * *'
+    # UTC times converted from IST
+    - cron: '30 2 * * *'   # 08:00 IST
+    - cron: '30 4 * * *'   # 10:00 IST
+    - cron: '30 6 * * *'   # 12:00 IST
+    - cron: '30 8 * * *'   # 14:00 IST
+    - cron: '30 10 * * *'  # 16:00 IST
+    - cron: '30 12 * * *'  # 18:00 IST
+    - cron: '0 14 * * *'   # 19:30 IST
+    - cron: '30 15 * * *'  # 21:00 IST
 
 permissions:
   contents: write
@@ -45,21 +44,14 @@ jobs:
     timeout-minutes: 30
 
     steps:
-
-      # STEP 1 - CHECKOUT REPOSITORY
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          fetch-depth: 1
 
-      # STEP 2 - SETUP PYTHON
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      # STEP 3 - INSTALL REQUIRED TOOLS
       - name: Install Tools
         run: |
           python -m pip install --upgrade pip
@@ -67,7 +59,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-noto-core
 
-      # STEP 4 - DETERMINE POSTING SLOT
       - name: Determine Posting Slot
         id: slot
         env:
@@ -89,108 +80,67 @@ jobs:
               "30 15 * * *": "21:00",
           }
 
-          if os.environ["EVENT_NAME"] == "schedule":
-              slot = cron_slots.get(
-                  os.environ.get("CRON_EXPRESSION", "")
-              )
+          event_name = os.environ.get("EVENT_NAME", "")
+          cron_expression = os.environ.get(
+              "CRON_EXPRESSION", ""
+          )
+          manual_slot = os.environ.get("MANUAL_SLOT", "")
+
+          print("Event:", event_name)
+          print("Schedule:", cron_expression)
+          print("Manual input:", manual_slot)
+
+          if event_name == "schedule":
+              slot = cron_slots.get(cron_expression)
+
+          elif event_name == "workflow_dispatch":
+              slot = manual_slot
+
           else:
-              slot = os.environ.get("MANUAL_SLOT")
+              raise RuntimeError(
+                  f"Unsupported event: {event_name}"
+              )
+
+          if not slot:
+              raise RuntimeError(
+                  f"Unable to determine slot for {event_name}"
+              )
 
           valid_slots = set(cron_slots.values()) | {"09:40"}
 
           if slot not in valid_slots:
-              raise RuntimeError("Invalid posting slot")
+              raise RuntimeError(
+                  f"Invalid posting slot: {slot}"
+              )
+
+          print("Selected IST slot:", slot)
 
           with open(
               os.environ["GITHUB_OUTPUT"], "a"
           ) as output:
               output.write(f"slot={slot}\n")
-
-          print("Selected IST slot:", slot)
           PY
 
-      # STEP 5 - LOAD POSTING HISTORY
-      - name: Load Posting History
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ github.repository }}
-        run: |
-          python - <<'PY'
-          import base64
-          import json
-          import os
-          from pathlib import Path
-          import requests
-
-          repo = os.environ["GH_REPOSITORY"]
-          token = os.environ["GH_TOKEN"]
-
-          url = (
-              f"https://api.github.com/repos/{repo}"
-              "/contents/posting_history.json"
-          )
-
-          response = requests.get(
-              url,
-              params={"ref": "facebook-posting-history"},
-              headers={
-                  "Authorization": f"Bearer {token}",
-                  "Accept": "application/vnd.github+json",
-                  "X-GitHub-Api-Version": "2022-11-28",
-              },
-              timeout=30,
-          )
-
-          response.raise_for_status()
-          result = response.json()
-
-          history = json.loads(
-              base64.b64decode(
-                  result["content"]
-              ).decode("utf-8")
-          )
-
-          if not isinstance(history, dict):
-              raise RuntimeError(
-                  "Posting history must be a JSON object"
-              )
-
-          Path("posting_history.json").write_text(
-              json.dumps(
-                  history,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-
-          print("Posting history loaded successfully")
-          print("History records:", len(history))
-          PY
-
-      # STEP 6 - CHECK ASSET FILES
       - name: Check Asset Files
         run: |
           ls -lh assets/backgrounds/
           ls -lh assets/music/
 
-      # STEP 7 - GENERATE PHOTOS AND REELS
       - name: Generate Photos and Reels
         run: python agent.py
 
-      # STEP 8 - VERIFY GENERATED FILES
       - name: Verify Generated Files
         run: |
           python - <<'PY'
           from pathlib import Path
 
           for i in range(1, 5):
-              for name in (
+              for filename in (
                   f"post_{i}.png",
                   f"reel_{i}.mp4",
                   f"caption_{i}.txt",
               ):
-                  path = Path("output") / name
+                  path = Path("output") / filename
 
                   if not path.is_file():
                       raise FileNotFoundError(path)
@@ -203,7 +153,6 @@ jobs:
                   print("Ready:", path)
           PY
 
-      # STEP 9 - AUTOMATIC FACEBOOK POSTING
       - name: Publish Scheduled Item
         env:
           POST_SLOT: ${{ steps.slot.outputs.slot }}
@@ -211,13 +160,9 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
-
-          # LIVE POSTING ENABLED
           DRY_RUN: 'false'
-
         run: python daily_post.py
 
-      # STEP 10 - SAVE GENERATED CONTENT
       - name: Save Generated Content
         if: always()
         uses: actions/upload-artifact@v4
