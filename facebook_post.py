@@ -6,13 +6,23 @@ from pathlib import Path
 
 import requests
 
-PAGE_ID = os.environ.get("FACEBOOK_PAGE_ID")
-PAGE_TOKEN = os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN")
+# ==========================================
+# RK GAUTAM FACEBOOK PUBLISHING AGENT
+# ==========================================
+
 API_VERSION = "v27.0"
+GRAPH_URL = f"https://graph.facebook.com/{API_VERSION}"
+
+PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
+PAGE_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
 
 OUTPUT = Path("output")
-DRY_RUN = os.environ.get("DRY_RUN", "true").lower() == "true"
+DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 
+
+# ==========================================
+# FACEBOOK API ERROR HANDLING
+# ==========================================
 
 def check_response(response):
     try:
@@ -24,21 +34,45 @@ def check_response(response):
 
     if not response.ok or "error" in result:
         error = result.get("error", {})
+        if not isinstance(error, dict):
+            error = {"message": str(error)}
+
+        code = error.get("code", "unknown")
+        message = error.get("message", "Unknown error")
+
         raise RuntimeError(
-            f"Facebook API error: {error.get('message', result)}"
+            f"Facebook API error {code}: {message}"
         )
 
     return result
 
 
+def credentials():
+    if not PAGE_ID or not PAGE_TOKEN:
+        raise RuntimeError(
+            "Missing Facebook Page credentials"
+        )
+
+
+# ==========================================
+# PHOTO PUBLISHING
+# ==========================================
+
 def post_photo(photo_path, caption):
+    photo_path = Path(photo_path)
+
+    if not photo_path.is_file():
+        raise FileNotFoundError(photo_path)
+
     if DRY_RUN:
-        print(f"[TEST] Photo ready: {photo_path}")
-        return
+        print(f"[DRY RUN] Photo: {photo_path}")
+        return {"status": "dry_run"}
 
-    url = f"https://graph.facebook.com/{API_VERSION}/{PAGE_ID}/photos"
+    credentials()
 
-    with open(photo_path, "rb") as photo:
+    url = f"{GRAPH_URL}/{PAGE_ID}/photos"
+
+    with photo_path.open("rb") as photo:
         response = requests.post(
             url,
             data={
@@ -51,17 +85,43 @@ def post_photo(photo_path, caption):
         )
 
     result = check_response(response)
-    print(f"Photo published: {result.get('id')}")
 
+    photo_id = result.get("id")
+
+    if not photo_id:
+        raise RuntimeError(
+            "Facebook did not return a photo ID"
+        )
+
+    print(f"Photo submitted: {photo_id}")
+
+    return {
+        "status": "submitted",
+        "type": "photo",
+        "facebook_id": photo_id,
+    }
+
+
+# ==========================================
+# REEL PUBLISHING
+# ==========================================
 
 def post_reel(video_path, caption):
-    if DRY_RUN:
-        print(f"[TEST] Reel ready: {video_path}")
-        return
+    video_path = Path(video_path)
 
-    # Step 1: Start Reel upload
+    if not video_path.is_file():
+        raise FileNotFoundError(video_path)
+
+    if DRY_RUN:
+        print(f"[DRY RUN] Reel: {video_path}")
+        return {"status": "dry_run"}
+
+    credentials()
+
+    # STEP 1: START UPLOAD
+
     start = requests.post(
-        f"https://graph.facebook.com/{API_VERSION}/{PAGE_ID}/video_reels",
+        f"{GRAPH_URL}/{PAGE_ID}/video_reels",
         data={
             "access_token": PAGE_TOKEN,
             "upload_phase": "start",
@@ -70,13 +130,22 @@ def post_reel(video_path, caption):
     )
 
     info = check_response(start)
-    video_id = info["video_id"]
-    upload_url = info["upload_url"]
 
-    # Step 2: Upload MP4 file
+    video_id = info.get("video_id")
+    upload_url = info.get("upload_url")
+
+    if not video_id or not upload_url:
+        raise RuntimeError(
+            "Facebook did not return video upload details"
+        )
+
+    print(f"Reel upload started: {video_id}")
+
+    # STEP 2: UPLOAD VIDEO
+
     file_size = video_path.stat().st_size
 
-    with open(video_path, "rb") as video:
+    with video_path.open("rb") as video:
         upload = requests.post(
             upload_url,
             headers={
@@ -91,9 +160,12 @@ def post_reel(video_path, caption):
 
     check_response(upload)
 
-    # Step 3: Finish and publish Reel
+    print("Reel upload completed")
+
+    # STEP 3: REQUEST PUBLISHING
+
     finish = requests.post(
-        f"https://graph.facebook.com/{API_VERSION}/{PAGE_ID}/video_reels",
+        f"{GRAPH_URL}/{PAGE_ID}/video_reels",
         data={
             "access_token": PAGE_TOKEN,
             "upload_phase": "finish",
@@ -105,13 +177,28 @@ def post_reel(video_path, caption):
     )
 
     result = check_response(finish)
-    print(f"Reel publish requested: {video_id}")
-    print(result)
 
+    if result.get("success") is not True:
+        raise RuntimeError(
+            "Reel publishing was not confirmed by API"
+        )
+
+    print(f"Reel publishing accepted: {video_id}")
+
+    return {
+        "status": "submitted",
+        "type": "reel",
+        "facebook_id": video_id,
+    }
+
+
+# ==========================================
+# MANUAL SCRIPT EXECUTION
+# ==========================================
 
 def main():
-    if not DRY_RUN and (not PAGE_ID or not PAGE_TOKEN):
-        sys.exit("Missing Facebook Page credentials")
+    if not DRY_RUN:
+        credentials()
 
     errors = []
 
@@ -120,36 +207,42 @@ def main():
         reel = OUTPUT / f"reel_{i}.mp4"
         caption_file = OUTPUT / f"caption_{i}.txt"
 
-        if not caption_file.exists():
-            errors.append(f"Missing caption: {caption_file}")
+        if not caption_file.is_file():
+            errors.append(
+                f"Missing caption: {caption_file}"
+            )
             continue
 
-        caption = caption_file.read_text(encoding="utf-8")
+        caption = caption_file.read_text(
+            encoding="utf-8"
+        ).strip()
 
-        if photo.exists():
+        if not caption:
+            errors.append(
+                f"Empty caption: {caption_file}"
+            )
+            continue
+
+        for kind, path, publish in (
+            ("photo", photo, post_photo),
+            ("reel", reel, post_reel),
+        ):
             try:
-                post_photo(photo, caption)
+                result = publish(path, caption)
+                print(f"{kind} {i}: {result['status']}")
             except Exception as exc:
-                errors.append(f"Photo {i}: {exc}")
-        else:
-            errors.append(f"Missing photo: {photo}")
+                errors.append(
+                    f"{kind} {i}: {type(exc).__name__}: {exc}"
+                )
 
-        if reel.exists():
-            try:
-                post_reel(reel, caption)
-            except Exception as exc:
-                errors.append(f"Reel {i}: {exc}")
-        else:
-            errors.append(f"Missing reel: {reel}")
-
-        time.sleep(2)
+            time.sleep(2)
 
     if errors:
         for error in errors:
             print("ERROR:", error)
         sys.exit(1)
 
-    print("All 4 photos and 4 reels processed!")
+    print("All content processed successfully")
 
 
 if __name__ == "__main__":
