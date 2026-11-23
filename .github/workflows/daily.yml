@@ -209,9 +209,9 @@ jobs:
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
 
-          # Scheduled runs publish LIVE
-          # Manual runs are DRY RUN
-          DRY_RUN: ${{ github.event_name != 'schedule' }}
+          # LIVE POSTING ENABLED
+          # Both manual and scheduled runs publish live
+          DRY_RUN: 'false'
 
         run: python daily_post.py
 
