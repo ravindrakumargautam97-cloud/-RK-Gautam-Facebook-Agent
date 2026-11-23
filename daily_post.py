@@ -15,6 +15,7 @@ import requests
 
 SLOTS = {
     "08:00": ("photo", 1),
+    "09:40": ("photo", 1),
     "10:00": ("reel", 1),
     "12:00": ("photo", 2),
     "14:00": ("reel", 2),
