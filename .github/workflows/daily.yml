@@ -4,8 +4,7 @@ name: RK Gautam Daily AI Agent
 on:
   workflow_dispatch:
     inputs:
-  
-    post_slot:
+      post_slot:
         description: "Select posting time (IST)"
         required: true
         type: choice
@@ -20,7 +19,6 @@ on:
           - "18:00"
           - "19:30"
           - "21:00"
-
 
   schedule:
     # GitHub cron uses UTC
@@ -98,7 +96,9 @@ jobs:
           else:
               slot = os.environ.get("MANUAL_SLOT")
 
-          if slot not in cron_slots.values():
+          valid_slots = set(cron_slots.values()) | {"09:40"}
+
+          if slot not in valid_slots:
               raise RuntimeError("Invalid posting slot")
 
           with open(
@@ -213,7 +213,6 @@ jobs:
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
 
           # LIVE POSTING ENABLED
-          # Both manual and scheduled runs publish live
           DRY_RUN: 'false'
 
         run: python daily_post.py
