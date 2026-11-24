@@ -30,7 +30,7 @@ BRANCH = "facebook-posting-history"
 HISTORY_FILE = "posting_history.json"
 IST = ZoneInfo("Asia/Kolkata")
 
-MAX_DELAY_MINUTES = 90
+MAX_DELAY_MINUTES = 120
 
 
 def now_ist():
