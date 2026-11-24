@@ -126,8 +126,8 @@
     "slot": "10:00",
     "type": "reel",
     "number": 1,
-    "status": "reserved",
+    "status": "needs_review",
     "github_run_id": "45328207778",
-    "updated_at": "2026-11-24T10:13:20.988885+05:30"
+    "updated_at": "2026-11-24T10:13:22.474453+05:30"
   }
 }
