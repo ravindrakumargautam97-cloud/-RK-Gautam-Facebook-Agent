@@ -1,0 +1,81 @@
+
+name: Test Smart Content Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      post_slot:
+        description: Select content testing time
+        required: true
+        type: choice
+        default: '08:00'
+        options:
+          - '08:00'
+          - '10:00'
+          - '12:00'
+          - '14:00'
+          - '16:00'
+          - '18:00'
+          - '19:30'
+          - '21:00'
+
+permissions:
+  contents: read
+
+jobs:
+  test-smart-content:
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install Pillow edge-tts requests
+
+      - name: Install FFmpeg and Fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-dejavu-core
+
+      - name: Check Python Modules
+        run: |
+          python -m py_compile agent.py
+          python -m py_compile smart_agent.py
+          python -m py_compile media_downloader.py
+          python -m py_compile music_generator.py
+          python -m py_compile quote_generator.py
+          python -m py_compile content_history.py
+          python -m py_compile design_generator.py
+
+      - name: Generate Smart Content
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          POST_SLOT: ${{ inputs.post_slot }}
+          TEST_MODE: 'true'
+        run: python smart_agent.py
+
+      - name: Check Generated Files
+        run: |
+          echo "Generated content:"
+          ls -lh output/
+
+      - name: Save Test Content
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-content-test-${{ github.run_id }}
+          path: output/
+          retention-days: 7
+          if-no-files-found: error
