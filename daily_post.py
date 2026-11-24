@@ -15,7 +15,7 @@ import requests
 
 SLOTS = {
     "08:00": ("photo", 1),
-    "09:40": ("photo", 1),
+    "09:40": ("photo", 1),  # Manual test only
     "10:00": ("reel", 1),
     "12:00": ("photo", 2),
     "14:00": ("reel", 2),
@@ -44,7 +44,9 @@ def now_string():
 
 def github_headers():
     return {
-        "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+        "Authorization": (
+            f"Bearer {os.environ['GH_TOKEN']}"
+        ),
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
@@ -69,8 +71,8 @@ def read_history():
         params={"ref": BRANCH},
         timeout=30,
     )
-    response.raise_for_status()
 
+    response.raise_for_status()
     result = response.json()
 
     content = base64.b64decode(
@@ -107,10 +109,15 @@ def write_history(history, sha, message):
         },
         timeout=30,
     )
+
     response.raise_for_status()
 
 
-def update_status(post_id, status, facebook_id=None):
+def update_status(
+    post_id,
+    status,
+    facebook_id=None,
+):
     history, sha = read_history()
 
     if post_id not in history:
@@ -123,7 +130,9 @@ def update_status(post_id, status, facebook_id=None):
     record["updated_at"] = now_string()
 
     if facebook_id:
-        record["facebook_id"] = str(facebook_id)
+        record["facebook_id"] = str(
+            facebook_id
+        )
 
     write_history(
         history,
@@ -141,7 +150,10 @@ def update_status(post_id, status, facebook_id=None):
 def validate_time(slot):
     current = now_ist()
 
-    hour, minute = map(int, slot.split(":"))
+    hour, minute = map(
+        int,
+        slot.split(":")
+    )
 
     scheduled = current.replace(
         hour=hour,
@@ -152,15 +164,45 @@ def validate_time(slot):
 
     delay = current - scheduled
 
+    print(
+        "Current IST:",
+        current.isoformat()
+    )
+
+    print(
+        "Scheduled IST:",
+        scheduled.isoformat()
+    )
+
+    print(
+        "Time difference (minutes):",
+        round(
+            delay.total_seconds() / 60,
+            2
+        )
+    )
+
     if delay < timedelta(0):
         raise RuntimeError(
-            f"Posting slot {slot} has not started yet"
+            f"Posting slot {slot} "
+            f"has not started yet. "
+            f"Current IST: "
+            f"{current.strftime('%H:%M:%S')}"
         )
 
-    if delay > timedelta(minutes=MAX_DELAY_MINUTES):
+    if delay > timedelta(
+        minutes=MAX_DELAY_MINUTES
+    ):
         raise RuntimeError(
-            f"Posting slot {slot} is too old"
+            f"Posting slot {slot} "
+            f"is too old. "
+            f"Current IST: "
+            f"{current.strftime('%H:%M:%S')}"
         )
+
+    print(
+        "Posting time validation passed"
+    )
 
     return current
 
@@ -170,15 +212,20 @@ def validate_time(slot):
 # ==========================================
 
 def main():
-    slot = os.getenv("POST_SLOT", "").strip()
+    slot = os.getenv(
+        "POST_SLOT", ""
+    ).strip()
 
     dry_run = (
-        os.getenv("DRY_RUN", "true").lower()
-        == "true"
+        os.getenv(
+            "DRY_RUN", "true"
+        ).lower() == "true"
     )
 
     if slot not in SLOTS:
-        sys.exit(f"Invalid POST_SLOT: {slot}")
+        sys.exit(
+            f"Invalid POST_SLOT: {slot}"
+        )
 
     kind, number = SLOTS[slot]
 
@@ -189,29 +236,58 @@ def main():
     )
 
     media = OUTPUT / filename
-    caption_file = OUTPUT / f"caption_{number}.txt"
 
-    for path in (media, caption_file):
+    caption_file = (
+        OUTPUT /
+        f"caption_{number}.txt"
+    )
+
+    # ======================================
+    # VERIFY MEDIA FILES
+    # ======================================
+
+    for path in (
+        media,
+        caption_file,
+    ):
         if not path.is_file():
-            raise FileNotFoundError(path)
+            raise FileNotFoundError(
+                path
+            )
 
         if path.stat().st_size == 0:
-            raise RuntimeError(f"Empty file: {path}")
+            raise RuntimeError(
+                f"Empty file: {path}"
+            )
 
-    caption = caption_file.read_text(
-        encoding="utf-8"
-    ).strip()
+    caption = (
+        caption_file.read_text(
+            encoding="utf-8"
+        ).strip()
+    )
 
     if not caption:
-        raise RuntimeError("Caption is empty")
+        raise RuntimeError(
+            "Caption is empty"
+        )
 
     current = now_ist()
-    today = current.strftime("%Y-%m-%d")
-    post_id = f"{today}_{slot.replace(':', '-')}"
+
+    today = current.strftime(
+        "%Y-%m-%d"
+    )
+
+    post_id = (
+        f"{today}_"
+        f"{slot.replace(':', '-')}"
+    )
 
     print("=" * 45)
-    print("RK GAUTAM FACEBOOK AI AGENT")
+    print(
+        "RK GAUTAM FACEBOOK AI AGENT"
+    )
     print("=" * 45)
+
     print("Post ID:", post_id)
     print("Slot:", slot)
     print("Type:", kind)
@@ -223,8 +299,12 @@ def main():
     # ======================================
 
     if dry_run:
-        print("DRY RUN - No Facebook post")
-        print("Posting history unchanged")
+        print(
+            "DRY RUN - No Facebook post"
+        )
+        print(
+            "Posting history unchanged"
+        )
         return
 
     # ======================================
@@ -241,10 +321,11 @@ def main():
     for name in required:
         if not os.getenv(name):
             raise RuntimeError(
-                f"Missing environment variable: {name}"
+                "Missing environment "
+                f"variable: {name}"
             )
 
-    # Validate before making any changes.
+    # Validate time before changing history.
     validate_time(slot)
 
     # ======================================
@@ -256,12 +337,22 @@ def main():
     if post_id in history:
         existing = history[post_id]
 
-        print("Post already recorded")
+        print(
+            "Post already recorded"
+        )
+
         print(
             "Existing status:",
-            existing.get("status", "unknown")
+            existing.get(
+                "status", "unknown"
+            )
         )
-        print("Skipping duplicate:", post_id)
+
+        print(
+            "Skipping duplicate:",
+            post_id
+        )
+
         return
 
     # ======================================
@@ -286,7 +377,10 @@ def main():
         f"Reserve Facebook post {post_id}",
     )
 
-    print("Reservation saved:", post_id)
+    print(
+        "Reservation saved:",
+        post_id
+    )
 
     # ======================================
     # PUBLISH TO FACEBOOK
@@ -301,20 +395,32 @@ def main():
         )
 
         if kind == "photo":
-            result = post_photo(media, caption)
+            result = post_photo(
+                media,
+                caption
+            )
         else:
-            result = post_reel(media, caption)
-
-        if not isinstance(result, dict):
-            raise RuntimeError(
-                "Invalid Facebook publishing result"
+            result = post_reel(
+                media,
+                caption
             )
 
-        facebook_id = result.get("facebook_id")
+        if not isinstance(
+            result, dict
+        ):
+            raise RuntimeError(
+                "Invalid Facebook "
+                "publishing result"
+            )
+
+        facebook_id = result.get(
+            "facebook_id"
+        )
 
         if not facebook_id:
             raise RuntimeError(
-                "Facebook ID missing from API result"
+                "Facebook ID missing "
+                "from API result"
             )
 
     except Exception as error:
@@ -322,8 +428,16 @@ def main():
             "Facebook publishing failed "
             "or outcome is uncertain"
         )
-        print("Error type:", type(error).__name__)
-        print("Error:", error)
+
+        print(
+            "Error type:",
+            type(error).__name__
+        )
+
+        print(
+            "Error:",
+            error
+        )
 
         try:
             update_status(
@@ -332,7 +446,8 @@ def main():
             )
         except Exception as history_error:
             print(
-                "Could not save review status:",
+                "Could not save "
+                "review status:",
                 history_error,
             )
 
@@ -348,12 +463,23 @@ def main():
         facebook_id=facebook_id,
     )
 
-    print("Facebook API submission accepted")
-    print("Facebook ID:", facebook_id)
-    print("Status: submitted")
     print(
-        "Verify Facebook publishing status "
-        "before marking as published"
+        "Facebook API submission accepted"
+    )
+
+    print(
+        "Facebook ID:",
+        facebook_id
+    )
+
+    print(
+        "Status: submitted"
+    )
+
+    print(
+        "Verify Facebook publishing "
+        "status before marking "
+        "as published"
     )
 
 
