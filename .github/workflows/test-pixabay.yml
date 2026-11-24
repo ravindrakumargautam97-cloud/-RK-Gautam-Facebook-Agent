@@ -1,0 +1,78 @@
+
+name: Test Pixabay API
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-pixabay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Requests
+        run: pip install requests
+
+      - name: Test Pixabay Connection
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          import requests
+
+          key = os.getenv("PIXABAY_API_KEY")
+
+          if not key:
+              raise RuntimeError("API Key Missing")
+
+          tests = [
+              ("Morning Photos", "https://pixabay.com/api/", "sunrise mountains"),
+              ("Afternoon Photos", "https://pixabay.com/api/", "sunny landscape"),
+              ("Evening Photos", "https://pixabay.com/api/", "sunset nature"),
+              ("Night Photos", "https://pixabay.com/api/", "moon stars night"),
+              ("Nature Videos", "https://pixabay.com/api/videos/", "mountains nature"),
+          ]
+
+          for name, url, query in tests:
+              try:
+                  response = requests.get(
+                      url,
+                      params={
+                          "key": key,
+                          "q": query,
+                          "safesearch": "true",
+                          "per_page": 5
+                      },
+                      timeout=30
+                  )
+              except requests.RequestException:
+                  raise RuntimeError("Connection failed") from None
+
+              print(name)
+              print("HTTP Status:", response.status_code)
+
+              if response.status_code != 200:
+                  raise RuntimeError("Pixabay API failed")
+
+              data = response.json()
+              hits = data.get("hits", [])
+
+              print("Available Results:", data.get("totalHits", 0))
+
+              if not hits:
+                  raise RuntimeError("No content found")
+
+              print("SUCCESS")
+              print("--------------------")
+
+          print("ALL PIXABAY TESTS PASSED")
+          PY
