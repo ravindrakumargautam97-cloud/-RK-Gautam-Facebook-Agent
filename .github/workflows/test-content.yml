@@ -22,6 +22,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: test-smart-content
+  cancel-in-progress: false
+
 jobs:
   test-smart-content:
 
@@ -38,6 +42,22 @@ jobs:
         with:
           python-version: '3.12'
 
+      # ==========================================
+      # PIXABAY API CACHE
+      # ==========================================
+
+      - name: Restore Pixabay API Cache
+        uses: actions/cache@v4
+        with:
+          path: .pixabay-cache
+          key: pixabay-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            pixabay-v1-
+
+      # ==========================================
+      # INSTALL REQUIRED TOOLS
+      # ==========================================
+
       - name: Install Python Packages
         run: |
           python -m pip install --upgrade pip
@@ -47,6 +67,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-noto-core fonts-dejavu-core
+
+      # ==========================================
+      # CHECK PYTHON MODULES
+      # ==========================================
 
       - name: Check Python Modules
         run: |
@@ -58,6 +82,10 @@ jobs:
           python -m py_compile content_history.py
           python -m py_compile design_generator.py
 
+      # ==========================================
+      # GENERATE SMART CONTENT
+      # ==========================================
+
       - name: Generate Smart Content
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
@@ -67,10 +95,23 @@ jobs:
           TEST_MODE: 'true'
         run: python smart_agent.py
 
+      # ==========================================
+      # VERIFY GENERATED CONTENT
+      # ==========================================
+
       - name: Check Generated Files
         run: |
           echo "Generated content:"
           ls -lh output/
+
+      - name: Check Pixabay Cache Files
+        run: |
+          echo "Pixabay cache files:"
+          ls -lh .pixabay-cache/
+
+      # ==========================================
+      # SAVE GENERATED CONTENT
+      # ==========================================
 
       - name: Save Test Content
         uses: actions/upload-artifact@v4
