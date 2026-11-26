@@ -1,0 +1,118 @@
+
+name: Test History and Recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rk-gautam-facebook-agent
+  cancel-in-progress: false
+
+jobs:
+  history-recovery-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPOSITORY: ${{ github.repository }}
+      TEST_MODE: 'true'
+      DRY_RUN: 'true'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Packages
+        run: python -m pip install requests
+
+      - name: Test History Writing and Recovery
+        run: |
+          python - <<'PY'
+          import uuid
+          import content_history as ch
+          import daily_post as dp
+
+          # Read production history without changing it
+          production, production_sha = ch.load_history()
+          posting, posting_sha = dp.read_history()
+
+          print("PRODUCTION HISTORY READ PASSED")
+
+          # Use a separate test file
+          ch.HISTORY_FILE = "test_recovery_history.json"
+
+          history, sha = ch.load_history()
+
+          test_id = "TEST-" + uuid.uuid4().hex
+
+          for category in ch.CATEGORIES:
+              ch.mark_used(
+                  history,
+                  category,
+                  test_id,
+                  "recovery-test"
+              )
+
+          ch.save_history(history, sha)
+
+          print("HISTORY WRITING TEST PASSED")
+
+          # Reload saved history
+          restored, restored_sha = ch.load_history()
+
+          for category in ch.CATEGORIES:
+              assert ch.is_used(
+                  restored,
+                  category,
+                  test_id
+              )
+
+              print("Recovered:", category)
+
+          print("HISTORY RECOVERY TEST PASSED")
+
+          # Verify duplicate protection after reload
+          for category in ch.CATEGORIES:
+              try:
+                  ch.mark_used(
+                      restored,
+                      category,
+                      test_id,
+                      "recovery-test"
+                  )
+              except RuntimeError:
+                  print("Duplicate blocked:", category)
+              else:
+                  raise AssertionError(
+                      "Duplicate content accepted"
+                  )
+
+          print("PERSISTENT DUPLICATE TEST PASSED")
+
+          # Verify production history remains unchanged
+          ch.HISTORY_FILE = "content_history.json"
+
+          current, current_sha = ch.load_history()
+          current_posting, current_posting_sha = dp.read_history()
+
+          assert current == production
+          assert current_sha == production_sha
+          assert current_posting == posting
+          assert current_posting_sha == posting_sha
+
+          print("PRODUCTION HISTORY UNCHANGED")
+
+          print("=" * 45)
+          print("ALL HISTORY RECOVERY TESTS PASSED")
+          print("No Facebook posting")
+          print("=" * 45)
+          PY
