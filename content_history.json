@@ -4,6 +4,11 @@
       "theme": "evening",
       "source": "assets/backgrounds/motivation.jpg",
       "used_at": "2026-11-26T16:01:36.912581+05:30"
+    },
+    "local:photo:2026-11-26:night:4c0196bb7f04974f": {
+      "theme": "night",
+      "source": "assets/backgrounds/emotional.jpg",
+      "used_at": "2026-11-26T19:31:50.840753+05:30"
     }
   },
   "videos": {
@@ -33,6 +38,11 @@
       "theme": "evening",
       "source": "",
       "used_at": "2026-11-26T18:02:12.590530+05:30"
+    },
+    "acc4204534f45ec3fc2b4e6a5ff8ee0ad6a04548399aa0e39e314f1506f82e2e": {
+      "theme": "night",
+      "source": "",
+      "used_at": "2026-11-26T19:31:50.840921+05:30"
     }
   },
   "music": {
