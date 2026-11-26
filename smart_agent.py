@@ -25,12 +25,24 @@ from content_history import (
 )
 
 
+# ==========================================
+# RK GAUTAM SMART AI AGENT
+# ==========================================
+
 OUTPUT = Path("output")
 WORK = Path("work")
 
 OUTPUT.mkdir(exist_ok=True)
 WORK.mkdir(exist_ok=True)
 
+MEDIA_SOURCE = os.getenv(
+    "MEDIA_SOURCE", "local"
+).strip().lower()
+
+
+# ==========================================
+# DAILY POSTING SCHEDULE
+# ==========================================
 
 SLOTS = {
     "08:00": ("morning", "photo", 1),
@@ -48,6 +60,43 @@ SLOTS = {
 }
 
 
+# ==========================================
+# MEDIA CREDIT
+# ==========================================
+
+def generate_media_credit(media):
+
+    provider = media.get(
+        "provider", ""
+    ).strip().lower()
+
+    creator = media.get("creator", "")
+    source = media.get("source", "")
+
+    if provider == "pixabay":
+
+        return (
+            "\n\n"
+            f"Background: {creator} / Pixabay"
+            f"\n{source}"
+        )
+
+    if provider == "local":
+
+        return (
+            "\n\n"
+            "Background: Local media collection"
+        )
+
+    raise RuntimeError(
+        "Unknown media provider"
+    )
+
+
+# ==========================================
+# MAIN SMART AGENT
+# ==========================================
+
 async def main():
 
     slot = os.getenv(
@@ -60,8 +109,17 @@ async def main():
     )
 
     if slot not in SLOTS:
+
         raise RuntimeError(
             f"Invalid slot: {slot}"
+        )
+
+    if MEDIA_SOURCE not in (
+        "local", "pixabay"
+    ):
+
+        raise RuntimeError(
+            f"Invalid media source: {MEDIA_SOURCE}"
         )
 
     theme, kind, number = SLOTS[slot]
@@ -69,18 +127,24 @@ async def main():
     print("=" * 45)
     print("RK GAUTAM SMART AI AGENT")
     print("=" * 45)
+
     print("Slot:", slot)
     print("Theme:", theme)
     print("Content:", kind)
+    print("Media source:", MEDIA_SOURCE)
     print("Test mode:", test_mode)
 
-    # Load permanent content history
+    # ======================================
+    # LOAD PERMANENT HISTORY
+    # ======================================
 
     history, sha = load_history()
 
     print_summary(history)
 
-    # Generate unused quote
+    # ======================================
+    # GENERATE UNIQUE QUOTE
+    # ======================================
 
     quote = generate_quote(
         theme,
@@ -92,6 +156,7 @@ async def main():
     lines = quote["lines"]
 
     if kind == "reel":
+
         title = {
             "morning": "MORNING MOTIVATION",
             "afternoon": "KEEP GOING",
@@ -99,9 +164,15 @@ async def main():
             "night": "PEACEFUL NIGHT",
         }[theme]
 
-    # Generate photo
+    print("Quote generated:", quote["id"])
+
+    # ======================================
+    # GENERATE PHOTO
+    # ======================================
 
     if kind == "photo":
+
+        print("Generating photo...")
 
         media = download_media(
             theme,
@@ -130,9 +201,15 @@ async def main():
             media["source"]
         )
 
-    # Generate moving reel
+        print("PHOTO GENERATION SUCCESS")
+
+    # ======================================
+    # GENERATE ANIMATED REEL
+    # ======================================
 
     else:
+
+        print("Generating reel...")
 
         media = download_media(
             theme,
@@ -141,6 +218,8 @@ async def main():
             get_used_ids(history, "videos")
         )
 
+        # Generate Hindi voiceover
+
         voice = WORK / "voice.mp3"
 
         await create_voice(
@@ -148,10 +227,27 @@ async def main():
             voice
         )
 
+        if (
+            not voice.is_file()
+            or voice.stat().st_size == 0
+        ):
+
+            raise RuntimeError(
+                "Voice generation failed"
+            )
+
+        print("HINDI VOICE SUCCESS")
+
+        # Calculate reel duration
+
         duration = max(
             20.0,
             get_duration(voice) + 2.5
         )
+
+        print("Reel duration:", duration)
+
+        # Generate original music
 
         music = generate_music(
             theme,
@@ -164,9 +260,14 @@ async def main():
         if music_id in get_used_ids(
             history, "music"
         ):
+
             raise RuntimeError(
                 "Duplicate music detected"
             )
+
+        print("BACKGROUND MUSIC SUCCESS")
+
+        # Create final reel
 
         destination = (
             OUTPUT / f"reel_{number}.mp4"
@@ -197,7 +298,11 @@ async def main():
             theme
         )
 
-    # Generate caption
+        print("REEL GENERATION SUCCESS")
+
+    # ======================================
+    # GENERATE CAPTION
+    # ======================================
 
     caption = quote["caption"].replace(
         quote["title"],
@@ -205,11 +310,7 @@ async def main():
         1
     )
 
-    caption += (
-        "\n\n"
-        f"Background: {media['creator']} / Pixabay"
-        f"\n{media['source']}"
-    )
+    caption += generate_media_credit(media)
 
     caption_file = (
         OUTPUT / f"caption_{number}.txt"
@@ -227,7 +328,11 @@ async def main():
         theme
     )
 
-    # Validate generated files
+    print("CAPTION GENERATION SUCCESS")
+
+    # ======================================
+    # VALIDATE GENERATED FILES
+    # ======================================
 
     for path in (
         destination,
@@ -235,16 +340,30 @@ async def main():
     ):
 
         if not path.is_file():
+
             raise RuntimeError(
                 f"Missing file: {path}"
             )
 
         if path.stat().st_size == 0:
+
             raise RuntimeError(
                 f"Empty file: {path}"
             )
 
-    # Save content history
+        print(
+            "Verified:",
+            path,
+            "Size:",
+            path.stat().st_size,
+            "bytes"
+        )
+
+    print("ALL GENERATED FILES VERIFIED")
+
+    # ======================================
+    # SAVE CONTENT HISTORY
+    # ======================================
 
     if test_mode:
 
@@ -255,12 +374,31 @@ async def main():
 
         save_history(history, sha)
 
+        print("CONTENT HISTORY SAVED")
+
     print_summary(history)
+
+    # ======================================
+    # FINAL REPORT
+    # ======================================
 
     print("=" * 45)
     print("CONTENT GENERATED SUCCESSFULLY")
+    print("=" * 45)
+
+    print("Slot:", slot)
+    print("Theme:", theme)
+    print("Content type:", kind)
+    print("Media source:", MEDIA_SOURCE)
+    print("Provider:", media.get("provider"))
     print("File:", destination)
     print("Caption:", caption_file)
+    print("Test mode:", test_mode)
+
+    if MEDIA_SOURCE == "local":
+
+        print("Pixabay API not used")
+
     print("=" * 45)
 
 
