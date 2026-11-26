@@ -1,6 +1,24 @@
 {
   "photos": {},
-  "videos": {},
-  "quotes": {},
-  "music": {}
+  "videos": {
+    "local:video:2026-11-26:afternoon:5e71504402dec34b": {
+      "theme": "afternoon",
+      "source": "assets/backgrounds/travel.jpg",
+      "used_at": "2026-11-26T14:39:43.241244+05:30"
+    }
+  },
+  "quotes": {
+    "5199d3bd91e19eeb9aae1aa3ddf54eb2b0f891fdea74a447c9325aa4c36c1beb": {
+      "theme": "afternoon",
+      "source": "",
+      "used_at": "2026-11-26T14:39:43.241455+05:30"
+    }
+  },
+  "music": {
+    "9bbf55d5aedf46f12b39d6fe00b9ba82a2fb6964627f9e3e52bf19162c078a06": {
+      "theme": "afternoon",
+      "source": "",
+      "used_at": "2026-11-26T14:39:43.241268+05:30"
+    }
+  }
 }
