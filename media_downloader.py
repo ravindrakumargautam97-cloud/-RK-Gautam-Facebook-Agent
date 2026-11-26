@@ -1,20 +1,33 @@
+
 import os
 import json
 import time
 import random
 import hashlib
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import requests
+from PIL import Image, ImageOps
 
+
+# ==========================================
+# RK GAUTAM SMART MEDIA DOWNLOADER
+# ==========================================
+
+BACKGROUND_DIR = Path("assets/backgrounds")
 
 CACHE_DIR = Path(".pixabay-cache")
 CACHE_SECONDS = 24 * 60 * 60
 
 MAX_PHOTO_BYTES = 20 * 1024 * 1024
 MAX_VIDEO_BYTES = 100 * 1024 * 1024
+
+MEDIA_SOURCE = os.getenv(
+    "MEDIA_SOURCE", "local"
+).strip().lower()
 
 THEMES = {
     "morning": [
@@ -43,6 +56,277 @@ THEMES = {
     ],
 }
 
+LOCAL_THEMES = {
+    "morning": "morning.jpg",
+    "afternoon": "travel.jpg",
+    "evening": "motivation.jpg",
+    "night": "emotional.jpg",
+}
+
+
+# ==========================================
+# DATE AND FILE HELPERS
+# ==========================================
+
+def today_ist():
+
+    return datetime.now(
+        ZoneInfo("Asia/Kolkata")
+    ).date().isoformat()
+
+
+def get_file_hash(path):
+
+    digest = hashlib.sha256()
+
+    with Path(path).open("rb") as file:
+
+        for chunk in iter(
+            lambda: file.read(65536), b""
+        ):
+
+            digest.update(chunk)
+
+    return digest.hexdigest()
+
+
+# ==========================================
+# LOCAL BACKGROUND SELECTION
+# ==========================================
+
+def select_local_background(theme):
+
+    theme_folder = BACKGROUND_DIR / theme
+
+    supported = {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+    }
+
+    candidates = []
+
+    if theme_folder.is_dir():
+
+        candidates = sorted(
+            path
+            for path in theme_folder.iterdir()
+            if path.is_file()
+            and path.suffix.lower() in supported
+        )
+
+    if not candidates:
+
+        preferred = (
+            BACKGROUND_DIR / LOCAL_THEMES[theme]
+        )
+
+        if preferred.is_file():
+
+            candidates = [preferred]
+
+    if not candidates:
+
+        candidates = sorted(
+            path
+            for path in BACKGROUND_DIR.glob("*")
+            if path.is_file()
+            and path.suffix.lower() in supported
+        )
+
+    if not candidates:
+
+        raise RuntimeError(
+            "No local background images found"
+        )
+
+    seed = hashlib.sha256(
+        f"{today_ist()}-{theme}".encode()
+    ).hexdigest()
+
+    rng = random.Random(seed)
+
+    return rng.choice(candidates)
+
+
+# ==========================================
+# CREATE LOCAL PHOTO
+# ==========================================
+
+def create_local_photo(source, destination):
+
+    with Image.open(source) as image:
+
+        image = ImageOps.exif_transpose(image)
+
+        image = image.convert("RGB")
+
+        image = ImageOps.fit(
+            image,
+            (1080, 1080),
+            method=Image.Resampling.LANCZOS
+        )
+
+        image.save(
+            destination,
+            format="JPEG",
+            quality=95
+        )
+
+
+# ==========================================
+# CREATE ANIMATED BACKGROUND VIDEO
+# ==========================================
+
+def create_local_video(source, destination):
+
+    prepared = destination.with_name(
+        destination.stem + "_source.jpg"
+    )
+
+    try:
+
+        with Image.open(source) as image:
+
+            image = ImageOps.exif_transpose(image)
+
+            image = image.convert("RGB")
+
+            image = ImageOps.fit(
+                image,
+                (2160, 3840),
+                method=Image.Resampling.LANCZOS
+            )
+
+            image.save(
+                prepared,
+                format="JPEG",
+                quality=95
+            )
+
+        video_filter = (
+            "zoompan="
+            "z='min(zoom+0.00025,1.20)':"
+            "x='iw/2-iw/zoom/2':"
+            "y='ih/2-ih/zoom/2':"
+            "d=750:"
+            "s=1080x1920:"
+            "fps=25"
+        )
+
+        command = [
+            "ffmpeg",
+            "-y",
+            "-i", str(prepared),
+            "-vf", video_filter,
+            "-t", "30",
+            "-an",
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            str(destination),
+        ]
+
+        subprocess.run(
+            command,
+            check=True,
+            timeout=300
+        )
+
+    finally:
+
+        prepared.unlink(missing_ok=True)
+
+
+# ==========================================
+# LOCAL MEDIA MODE
+# ==========================================
+
+def local_media(
+    theme,
+    media_type,
+    destination,
+    used_ids=None
+):
+
+    destination = Path(destination)
+
+    destination.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    source = select_local_background(theme)
+
+    source_hash = get_file_hash(source)
+
+    used_ids = set(used_ids or [])
+
+    # Local backgrounds may be reused.
+    # Each daily use receives a separate history ID.
+
+    base_id = (
+        f"local:{media_type}:"
+        f"{today_ist()}:{theme}:"
+        f"{source_hash[:16]}"
+    )
+
+    media_id = base_id
+
+    attempt = 1
+
+    while media_id in used_ids:
+
+        media_id = f"{base_id}:{attempt}"
+
+        attempt += 1
+
+    if media_type == "photo":
+
+        create_local_photo(
+            source,
+            destination
+        )
+
+    else:
+
+        create_local_video(
+            source,
+            destination
+        )
+
+    if (
+        not destination.is_file()
+        or destination.stat().st_size == 0
+    ):
+
+        raise RuntimeError(
+            "Local media generation failed"
+        )
+
+    print("=" * 40)
+    print("LOCAL MEDIA SUCCESS")
+    print("=" * 40)
+
+    print("Media source: LOCAL")
+    print("Theme:", theme)
+    print("Media type:", media_type)
+    print("Background:", source)
+    print("Media ID:", media_id)
+    print("Output:", destination)
+    print("Pixabay API not used")
+
+    return {
+        "id": media_id,
+        "path": str(destination),
+        "creator": "Local background collection",
+        "source": str(source),
+        "provider": "Local",
+    }
+
 
 # ==========================================
 # PIXABAY API CACHE
@@ -67,6 +351,7 @@ def cached_search(endpoint, params, key):
     if cache_file.exists():
 
         try:
+
             cached = json.loads(
                 cache_file.read_text(
                     encoding="utf-8"
@@ -82,20 +367,19 @@ def cached_search(endpoint, params, key):
                 return cached["response"]
 
         except (ValueError, KeyError, OSError):
+
             pass
 
     print("Pixabay CACHE MISS")
-
-    request_params = {
-        **params,
-        "key": key,
-    }
 
     try:
 
         response = requests.get(
             endpoint,
-            params=request_params,
+            params={
+                **params,
+                "key": key,
+            },
             timeout=30
         )
 
@@ -112,6 +396,7 @@ def cached_search(endpoint, params, key):
         )
 
     try:
+
         data = response.json()
 
     except ValueError:
@@ -138,40 +423,44 @@ def cached_search(endpoint, params, key):
 
 
 # ==========================================
-# MEDIA DOWNLOADER
+# PIXABAY MEDIA MODE
 # ==========================================
 
-def download_media(
+def pixabay_media(
     theme,
     media_type,
     destination,
     used_ids=None
 ):
 
+    approved = os.getenv(
+        "PIXABAY_APPROVED", "false"
+    ).lower() == "true"
+
+    if not approved:
+
+        raise RuntimeError(
+            "Pixabay permission is pending"
+        )
+
     key = os.getenv("PIXABAY_API_KEY")
 
     if not key:
-        raise RuntimeError("Pixabay API Key missing")
 
-    if theme not in THEMES:
-        raise ValueError("Invalid theme")
-
-    if media_type not in ("photo", "video"):
-        raise ValueError("Invalid media type")
+        raise RuntimeError(
+            "Pixabay API Key missing"
+        )
 
     used_ids = set(used_ids or [])
 
-    today = datetime.now(
-        ZoneInfo("Asia/Kolkata")
-    ).date().isoformat()
-
     seed = hashlib.sha256(
-        f"{today}-{theme}-{media_type}".encode()
+        f"{today_ist()}-{theme}-{media_type}".encode()
     ).hexdigest()
 
     rng = random.Random(seed)
 
     queries = THEMES[theme].copy()
+
     rng.shuffle(queries)
 
     endpoint = (
@@ -228,7 +517,6 @@ def download_media(
 
             if media_id in used_ids:
 
-                print("Duplicate skipped:", media_id)
                 continue
 
             if media_type == "photo":
@@ -237,16 +525,18 @@ def download_media(
 
             else:
 
-                videos = item.get("videos", {})
-
-                medium = videos.get("medium", {})
+                medium = item.get(
+                    "videos", {}
+                ).get("medium", {})
 
                 if medium.get("size", 0) > max_bytes:
+
                     continue
 
                 url = medium.get("url")
 
             if not url:
+
                 continue
 
             temporary = destination.with_suffix(
@@ -278,7 +568,7 @@ def download_media(
                     ):
 
                         raise RuntimeError(
-                            "Invalid media type received"
+                            "Invalid media type"
                         )
 
                     length = int(
@@ -288,6 +578,7 @@ def download_media(
                     )
 
                     if length > max_bytes:
+
                         raise RuntimeError(
                             "Media exceeds size limit"
                         )
@@ -301,11 +592,13 @@ def download_media(
                         ):
 
                             if not chunk:
+
                                 continue
 
                             downloaded_bytes += len(chunk)
 
                             if downloaded_bytes > max_bytes:
+
                                 raise RuntimeError(
                                     "Download size limit reached"
                                 )
@@ -313,7 +606,10 @@ def download_media(
                             file.write(chunk)
 
                 if temporary.stat().st_size == 0:
-                    raise RuntimeError("Empty media file")
+
+                    raise RuntimeError(
+                        "Empty media file"
+                    )
 
                 temporary.replace(destination)
 
@@ -326,19 +622,13 @@ def download_media(
 
                 temporary.unlink(missing_ok=True)
 
-                print("Media download skipped:", media_id)
+                print("Media skipped:", media_id)
 
                 continue
 
-            print("=" * 40)
-            print("MEDIA DOWNLOAD SUCCESS")
-            print("=" * 40)
-
+            print("PIXABAY MEDIA SUCCESS")
             print("Theme:", theme)
-            print("Media type:", media_type)
             print("Media ID:", media_id)
-            print("Creator:", item.get("user", ""))
-            print("Source:", item.get("pageURL", ""))
             print("Downloaded:", destination)
 
             return {
@@ -346,8 +636,53 @@ def download_media(
                 "path": str(destination),
                 "creator": item.get("user", ""),
                 "source": item.get("pageURL", ""),
+                "provider": "Pixabay",
             }
 
     raise RuntimeError(
         f"No unused media found: {theme}/{media_type}"
+    )
+
+
+# ==========================================
+# MAIN MEDIA SELECTOR
+# ==========================================
+
+def download_media(
+    theme,
+    media_type,
+    destination,
+    used_ids=None
+):
+
+    if theme not in THEMES:
+
+        raise ValueError("Invalid theme")
+
+    if media_type not in ("photo", "video"):
+
+        raise ValueError("Invalid media type")
+
+    print("Selected media source:", MEDIA_SOURCE)
+
+    if MEDIA_SOURCE == "local":
+
+        return local_media(
+            theme,
+            media_type,
+            destination,
+            used_ids
+        )
+
+    if MEDIA_SOURCE == "pixabay":
+
+        return pixabay_media(
+            theme,
+            media_type,
+            destination,
+            used_ids
+        )
+
+    raise RuntimeError(
+        f"Unsupported media source: {MEDIA_SOURCE}"
     )
