@@ -177,7 +177,7 @@ jobs:
         if: always() && steps.preflight.outputs.proceed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: rk-gautam-content-${{ github.run_id }}
+          name: rk-gautam-content-${{ github.run_id }}-${{ github.run_attempt }}
           path: output/
-          retention-days: 7
+          retention-days: 30
           if-no-files-found: warn
