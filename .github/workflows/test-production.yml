@@ -1,0 +1,269 @@
+
+name: Test Production Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      post_slot:
+        description: "Select test slot (IST)"
+        required: true
+        type: choice
+        default: "08:00"
+        options:
+          - "08:00"
+          - "10:00"
+          - "12:00"
+          - "14:00"
+          - "16:00"
+          - "18:00"
+          - "19:30"
+          - "21:00"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rk-gautam-facebook-agent
+  cancel-in-progress: false
+
+jobs:
+  production-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      POST_SLOT: ${{ inputs.post_slot }}
+      TEST_MODE: 'true'
+      DRY_RUN: 'true'
+      GH_TOKEN: ${{ github.token }}
+      GH_REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore Pixabay Cache
+        uses: actions/cache@v4
+        with:
+          path: .pixabay-cache
+          key: pixabay-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            pixabay-v1-
+
+      - name: Install Tools
+        run: |
+          python -m pip install Pillow edge-tts requests
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-dejavu-core
+
+      - name: Check Python Modules
+        run: |
+          python -m py_compile agent.py
+          python -m py_compile smart_agent.py
+          python -m py_compile daily_post.py
+          python -m py_compile facebook_post.py
+          python -m py_compile content_history.py
+          python -m py_compile media_downloader.py
+          python -m py_compile music_generator.py
+          python -m py_compile quote_generator.py
+          python -m py_compile design_generator.py
+
+      - name: Validate Slot Mapping and Time
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import datetime, timedelta
+          from unittest.mock import patch
+
+          import daily_post as dp
+          import smart_agent as sa
+
+          slot = os.environ["POST_SLOT"]
+
+          assert set(dp.SLOTS) == set(sa.SLOTS)
+
+          for key in dp.SLOTS:
+              assert dp.SLOTS[key] == sa.SLOTS[key][1:]
+
+          print("ALL SLOT MAPPINGS PASSED")
+
+          hour, minute = map(int, slot.split(":"))
+
+          scheduled = datetime.now(dp.IST).replace(
+              hour=hour,
+              minute=minute,
+              second=0,
+              microsecond=0
+          )
+
+          with patch.object(dp, "now_ist",
+                            return_value=scheduled + timedelta(minutes=5)):
+              dp.validate_time(slot)
+
+          for offset in (-1, 121):
+              with patch.object(dp, "now_ist",
+                                return_value=scheduled + timedelta(minutes=offset)):
+                  try:
+                      dp.validate_time(slot)
+                  except RuntimeError:
+                      print("Invalid posting time blocked:", offset)
+                  else:
+                      raise AssertionError("Invalid time accepted")
+
+          print("ALL TIME VALIDATION TESTS PASSED")
+          PY
+
+      - name: Check Permanent History
+        run: |
+          python - <<'PY'
+          from content_history import load_history, print_summary
+          from daily_post import read_history
+
+          history, sha = load_history()
+          print_summary(history)
+
+          posting_history, sha = read_history()
+
+          print("Posting records:", len(posting_history))
+          print("HISTORY READ TEST PASSED")
+          PY
+
+      - name: Generate Smart Content
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: python smart_agent.py
+
+      - name: Verify Generated Files
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from daily_post import SLOTS
+
+          kind, number = SLOTS[os.environ["POST_SLOT"]]
+
+          filename = (
+              f"post_{number}.png"
+              if kind == "photo"
+              else f"reel_{number}.mp4"
+          )
+
+          for name in (filename, f"caption_{number}.txt"):
+              path = Path("output") / name
+              assert path.is_file(), f"Missing: {path}"
+              assert path.stat().st_size > 0, f"Empty: {path}"
+              print("Verified:", path)
+
+          print("ALL GENERATED FILES VERIFIED")
+          PY
+
+      - name: Test Facebook Publishing Dry Run
+        run: python daily_post.py
+
+      - name: Test Duplicate and Failure Protection
+        run: |
+          python - <<'PY'
+          import os
+          from unittest.mock import patch
+
+          import daily_post as dp
+          import facebook_post as fb
+          import content_history as ch
+
+          history = ch.empty_history()
+
+          for category in ch.CATEGORIES:
+              ch.mark_used(
+                  history, category, "TEST-ID", "test"
+              )
+
+              try:
+                  ch.mark_used(
+                      history, category, "TEST-ID", "test"
+                  )
+              except RuntimeError:
+                  print("Duplicate blocked:", category)
+              else:
+                  raise AssertionError("Duplicate accepted")
+
+          slot = os.environ["POST_SLOT"]
+          kind, number = dp.SLOTS[slot]
+
+          post_id = (
+              dp.now_ist().strftime("%Y-%m-%d")
+              + "_"
+              + slot.replace(":", "-")
+          )
+
+          fake_env = {
+              "DRY_RUN": "false",
+              "FACEBOOK_PAGE_ID": "TEST",
+              "FACEBOOK_PAGE_ACCESS_TOKEN": "TEST"
+          }
+
+          with patch.dict(os.environ, fake_env), \
+               patch.object(dp, "validate_time"), \
+               patch.object(dp, "read_history",
+                            return_value=({post_id: {
+                                "status": "submitted"
+                            }}, "test-sha")), \
+               patch.object(dp, "write_history") as write, \
+               patch.object(fb, "post_photo") as photo, \
+               patch.object(fb, "post_reel") as reel:
+
+              dp.main()
+
+              write.assert_not_called()
+              photo.assert_not_called()
+              reel.assert_not_called()
+
+          print("DUPLICATE POST TEST PASSED")
+
+          with patch.dict(os.environ, fake_env), \
+               patch.object(dp, "validate_time"), \
+               patch.object(dp, "read_history",
+                            return_value=({}, "test-sha")), \
+               patch.object(dp, "write_history") as write, \
+               patch.object(dp, "update_status") as update, \
+               patch.object(fb, "post_photo",
+                            side_effect=RuntimeError("Simulated failure")), \
+               patch.object(fb, "post_reel",
+                            side_effect=RuntimeError("Simulated failure")):
+
+              try:
+                  dp.main()
+              except RuntimeError as error:
+                  assert str(error) == "Simulated failure"
+              else:
+                  raise AssertionError("Failure not detected")
+
+              write.assert_called_once()
+              update.assert_called_once_with(
+                  post_id, "needs_review"
+              )
+
+          print("FAILED PUBLISHING SAFETY TEST PASSED")
+          print("ALL SIMULATED PROTECTION TESTS PASSED")
+          PY
+
+      - name: Final Test Report
+        run: |
+          echo "======================================"
+          echo "PRODUCTION INTEGRATION TEST PASSED"
+          echo "No real Facebook posting"
+          echo "Production history unchanged"
+          echo "======================================"
+
+      - name: Save Test Content
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-test-${{ github.run_id }}
+          path: output/
+          retention-days: 7
+          if-no-files-found: warn
