@@ -29,6 +29,7 @@ concurrency:
 
 jobs:
   daily-content:
+    if: vars.ENABLE_LIVE_POSTING == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -41,83 +42,130 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Tools
+      - name: Install Python Packages
         run: |
           python -m pip install --upgrade pip
           python -m pip install Pillow edge-tts requests
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-core
 
-      - name: Determine Posting Slot
-        id: slot
+      - name: Check Posting Time and Duplicate
+        id: preflight
         env:
-          POST_SLOT_INPUT: ${{ inputs.post_slot }}
+          POST_SLOT: ${{ inputs.post_slot }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
         run: |
           python - <<'PY'
           import os
+          from daily_post import (
+              SLOTS,
+              now_ist,
+              validate_time,
+              read_history,
+          )
 
-          slot = os.environ.get("POST_SLOT_INPUT", "")
+          slot = os.environ["POST_SLOT"]
 
-          valid_slots = {
-              "08:00",
-              "09:40",
-              "10:00",
-              "12:00",
-              "14:00",
-              "16:00",
-              "18:00",
-              "19:30",
-              "21:00",
-          }
+          if slot not in SLOTS:
+              raise RuntimeError(f"Invalid slot: {slot}")
 
-          if slot not in valid_slots:
-              raise RuntimeError(
-                  f"Invalid posting slot: {slot}"
-              )
+          validate_time(slot)
 
-          print("Selected IST slot:", slot)
+          post_id = (
+              now_ist().strftime("%Y-%m-%d")
+              + "_"
+              + slot.replace(":", "-")
+          )
 
-          with open(
-              os.environ["GITHUB_OUTPUT"], "a"
-          ) as output:
-              output.write(f"slot={slot}\n")
+          history, sha = read_history()
+
+          proceed = post_id not in history
+
+          if not proceed:
+              print("Post already recorded:", post_id)
+              print("Skipping duplicate")
+          else:
+              print("Preflight check passed:", post_id)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"proceed={str(proceed).lower()}\n")
           PY
 
-      - name: Check Asset Files
-        run: |
-          ls -lh assets/backgrounds/
-          ls -lh assets/music/
+      - name: Restore Pixabay API Cache
+        if: steps.preflight.outputs.proceed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .pixabay-cache
+          key: pixabay-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            pixabay-v1-
 
-      - name: Generate Photos and Reels
-        run: python agent.py
+      - name: Install FFmpeg and Fonts
+        if: steps.preflight.outputs.proceed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-dejavu-core
+
+      - name: Check Python Modules
+        if: steps.preflight.outputs.proceed == 'true'
+        run: |
+          python -m py_compile agent.py
+          python -m py_compile smart_agent.py
+          python -m py_compile media_downloader.py
+          python -m py_compile music_generator.py
+          python -m py_compile quote_generator.py
+          python -m py_compile design_generator.py
+          python -m py_compile content_history.py
+          python -m py_compile daily_post.py
+          python -m py_compile facebook_post.py
+
+      - name: Generate Smart Content
+        if: steps.preflight.outputs.proceed == 'true'
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          POST_SLOT: ${{ inputs.post_slot }}
+          TEST_MODE: 'false'
+        run: python smart_agent.py
 
       - name: Verify Generated Files
+        if: steps.preflight.outputs.proceed == 'true'
+        env:
+          POST_SLOT: ${{ inputs.post_slot }}
         run: |
           python - <<'PY'
+          import os
           from pathlib import Path
+          from daily_post import SLOTS
 
-          for i in range(1, 5):
-              for filename in (
-                  f"post_{i}.png",
-                  f"reel_{i}.mp4",
-                  f"caption_{i}.txt",
-              ):
-                  path = Path("output") / filename
+          slot = os.environ["POST_SLOT"]
+          kind, number = SLOTS[slot]
 
-                  if not path.is_file():
-                      raise FileNotFoundError(path)
+          if kind == "photo":
+              media = f"post_{number}.png"
+          else:
+              media = f"reel_{number}.mp4"
 
-                  if path.stat().st_size == 0:
-                      raise RuntimeError(
-                          f"Empty file: {path}"
-                      )
+          caption = f"caption_{number}.txt"
 
-                  print("Ready:", path)
+          for filename in (media, caption):
+              path = Path("output") / filename
+
+              if not path.is_file():
+                  raise FileNotFoundError(path)
+
+              if path.stat().st_size == 0:
+                  raise RuntimeError(f"Empty file: {path}")
+
+              print("Ready:", path)
+
+          print("ALL REQUIRED FILES VERIFIED")
           PY
 
       - name: Publish Scheduled Item
+        if: steps.preflight.outputs.proceed == 'true'
         env:
-          POST_SLOT: ${{ steps.slot.outputs.slot }}
+          POST_SLOT: ${{ inputs.post_slot }}
           GH_TOKEN: ${{ github.token }}
           GH_REPOSITORY: ${{ github.repository }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
@@ -126,7 +174,7 @@ jobs:
         run: python daily_post.py
 
       - name: Save Generated Content
-        if: always()
+        if: always() && steps.preflight.outputs.proceed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: rk-gautam-content-${{ github.run_id }}
