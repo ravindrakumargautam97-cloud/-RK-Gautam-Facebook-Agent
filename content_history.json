@@ -61,6 +61,11 @@
       "theme": "evening",
       "source": "assets/backgrounds/motivation.jpg",
       "used_at": "2026-11-27T18:02:22.431167+05:30"
+    },
+    "local:video:2026-11-27:night:4c0196bb7f04974f": {
+      "theme": "night",
+      "source": "assets/backgrounds/emotional.jpg",
+      "used_at": "2026-11-27T21:02:02.029407+05:30"
     }
   },
   "quotes": {
@@ -123,6 +128,11 @@
       "theme": "night",
       "source": "",
       "used_at": "2026-11-27T19:31:48.052772+05:30"
+    },
+    "00c8ea138178fcbbd4b3380b35a2d5343fb126d9bbbf3ce224f429b15d326249": {
+      "theme": "night",
+      "source": "",
+      "used_at": "2026-11-27T21:02:02.029633+05:30"
     }
   },
   "music": {
@@ -155,6 +165,11 @@
       "theme": "evening",
       "source": "",
       "used_at": "2026-11-27T18:02:22.431200+05:30"
+    },
+    "094badad0565d166ae6ce6ef9416f41268495d68a7ea65cd7b76b1dafed89f57": {
+      "theme": "night",
+      "source": "",
+      "used_at": "2026-11-27T21:02:02.029433+05:30"
     }
   }
 }
