@@ -31,6 +31,11 @@
       "theme": "night",
       "source": "assets/backgrounds/emotional.jpg",
       "used_at": "2026-11-26T21:01:55.156224+05:30"
+    },
+    "local:video:2026-11-27:morning:8a0fb7c3dacff42a": {
+      "theme": "morning",
+      "source": "assets/backgrounds/morning.jpg",
+      "used_at": "2026-11-27T10:01:53.807819+05:30"
     }
   },
   "quotes": {
@@ -63,6 +68,11 @@
       "theme": "morning",
       "source": "",
       "used_at": "2026-11-27T08:01:38.055576+05:30"
+    },
+    "93d4f1a3a41effc17c143f8e27d0e86a4208a0ee8912ba63aec6e43e771e63f8": {
+      "theme": "morning",
+      "source": "",
+      "used_at": "2026-11-27T10:01:53.808031+05:30"
     }
   },
   "music": {
@@ -80,6 +90,11 @@
       "theme": "night",
       "source": "",
       "used_at": "2026-11-26T21:01:55.156249+05:30"
+    },
+    "287e1861285d39bf472ab6b2cadbfddc2ea701e5005c36001b01c94dbbf2cb71": {
+      "theme": "morning",
+      "source": "",
+      "used_at": "2026-11-27T10:01:53.807846+05:30"
     }
   }
 }
