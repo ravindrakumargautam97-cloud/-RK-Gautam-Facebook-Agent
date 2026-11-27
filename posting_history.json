@@ -254,8 +254,9 @@
     "slot": "18:00",
     "type": "reel",
     "number": 3,
-    "status": "reserved",
+    "status": "submitted",
     "github_run_id": "45999305071",
-    "updated_at": "2026-11-27T18:02:23.974159+05:30"
+    "updated_at": "2026-11-27T18:02:31.968515+05:30",
+    "facebook_id": "2366191614150700"
   }
 }
