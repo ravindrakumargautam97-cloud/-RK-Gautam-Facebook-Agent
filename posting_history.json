@@ -244,8 +244,9 @@
     "slot": "16:00",
     "type": "photo",
     "number": 3,
-    "status": "reserved",
+    "status": "submitted",
     "github_run_id": "45982754207",
-    "updated_at": "2026-11-27T16:01:34.188621+05:30"
+    "updated_at": "2026-11-27T16:01:38.380089+05:30",
+    "facebook_id": "122111066739548834"
   }
 }
