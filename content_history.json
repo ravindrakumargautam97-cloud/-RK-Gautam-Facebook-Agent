@@ -14,6 +14,11 @@
       "theme": "morning",
       "source": "assets/backgrounds/morning.jpg",
       "used_at": "2026-11-27T08:01:38.055410+05:30"
+    },
+    "local:photo:2026-11-27:afternoon:5e71504402dec34b": {
+      "theme": "afternoon",
+      "source": "assets/backgrounds/travel.jpg",
+      "used_at": "2026-11-27T12:01:34.308100+05:30"
     }
   },
   "videos": {
@@ -73,6 +78,11 @@
       "theme": "morning",
       "source": "",
       "used_at": "2026-11-27T10:01:53.808031+05:30"
+    },
+    "4e5ea02437005a4a65313cd3cd666d92078f54810bbcd4e700f0e7a18102d046": {
+      "theme": "afternoon",
+      "source": "",
+      "used_at": "2026-11-27T12:01:34.308272+05:30"
     }
   },
   "music": {
