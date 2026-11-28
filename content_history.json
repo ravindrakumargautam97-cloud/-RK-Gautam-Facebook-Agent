@@ -39,6 +39,11 @@
       "theme": "afternoon",
       "source": "assets/backgrounds/travel.jpg",
       "used_at": "2026-11-28T12:01:33.909524+05:30"
+    },
+    "local:photo:2026-11-28:evening:8321e7481ca5199d": {
+      "theme": "evening",
+      "source": "assets/backgrounds/motivation.jpg",
+      "used_at": "2026-11-28T16:01:28.788012+05:30"
     }
   },
   "videos": {
@@ -173,6 +178,11 @@
       "theme": "afternoon",
       "source": "",
       "used_at": "2026-11-28T14:01:59.462696+05:30"
+    },
+    "6e7036770cbf7705df648fcb23600760c6c4d0752888abbfd71fdd6fe7a7c71c": {
+      "theme": "evening",
+      "source": "",
+      "used_at": "2026-11-28T16:01:28.788187+05:30"
     }
   },
   "music": {
